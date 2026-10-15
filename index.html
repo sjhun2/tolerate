@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>Tolerate: The Deep Drop</title>
+    <meta name="description" content="Daily number-estimation game where you set a mattress range over a canyon to catch the jumper." />
+    <meta property="og:title" content="Tolerate: The Deep Drop" />
+    <meta property="og:description" content="Daily number-estimation game where you set a mattress range over a canyon to catch the jumper." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-container">
+      <!-- Header -->
+      <header class="game-header">
+        <h1 class="brand-title">
+          <span>TOLERATE</span>
+          <span class="brand-dot" aria-hidden="true"></span>
+          <span>THE DEEP DROP</span>
+        </h1>
+
+        <!-- Milestone 1 Sky Preview Switcher (Slot 1: Day, Slot 2: Sunset, Slot 3: Night) -->
+        <nav class="sky-switcher-bar" aria-label="Sky slots">
+          <button type="button" class="sky-tab-btn active" data-slot="1" title="Slot 1: Daytime Sky">
+            <span class="sky-indicator day"></span>
+            <span>Slot 1 · Day</span>
+          </button>
+          <button type="button" class="sky-tab-btn" data-slot="2" title="Slot 2: Sunset Sky">
+            <span class="sky-indicator sunset"></span>
+            <span>Slot 2 · Sunset</span>
+          </button>
+          <button type="button" class="sky-tab-btn" data-slot="3" title="Slot 3: Night Sky">
+            <span class="sky-indicator night"></span>
+            <span>Slot 3 · Night</span>
+          </button>
+        </nav>
+      </header>
+
+      <!-- Question Card Section -->
+      <section class="question-section" aria-live="polite">
+        <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
+        <h2 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h2>
+      </section>
+
+      <!-- Canyon Scene (SVG 390x420 viewBox) -->
+      <div id="scene-svg-wrapper" class="scene-container">
+        <!-- SVG rendered dynamically by game.js -->
+      </div>
+
+      <!-- Range & Multiplier Readout Panel -->
+      <section class="readout-panel" aria-label="Current Range and Multiplier">
+        <div class="range-display">
+          <span class="range-label">Chosen Range</span>
+          <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
+        </div>
+        <div class="multiplier-tag">
+          <span class="multiplier-label">Multiplier</span>
+          <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
+        </div>
+      </section>
+
+      <!-- Action Section -->
+      <section class="action-section">
+        <button id="btn-lock-in" type="button" class="btn-lock">
+          Lock it in
+        </button>
+
+        <!-- Milestone 1 Palette Swapper -->
+        <div class="milestone-info">
+          <div class="milestone-badge">Milestone 1 · Static Screen Verification</div>
+          <div class="palette-selector-row">
+            <span class="palette-selector-label">Palette:</span>
+            <button type="button" class="palette-btn active" data-palette="meadow">Meadow</button>
+            <button type="button" class="palette-btn" data-palette="mint">Mint</button>
+            <button type="button" class="palette-btn" data-palette="golden">Golden</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="./config.js"></script>
+    <script src="./game.js"></script>
+  </body>
+</html>
