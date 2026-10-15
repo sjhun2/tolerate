@@ -1,0 +1,426 @@
+/* ==========================================================================
+   Tolerate: The Deep Drop — Styles
+   File: style.css
+   Phone-first (390px base), centered up to 480px on desktop, pure CSS.
+   ========================================================================== */
+
+/* Google Fonts with swap display */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap');
+
+:root {
+  /* Default Meadow Palette */
+  --color-hills: #7FB88F;
+  --color-deep: #2F5D50;
+  --color-cream: #FFF8EC;
+  --color-accent: #F28C38;
+  --color-mattress: #FFFFFF;
+  --color-mattress-outline: #C9CED2;
+  --color-wood: #9C6638;
+  --color-wood-dark: #7A4C25;
+  --color-text-subtle: #57776D;
+  --color-border: #E8DFCE;
+  --color-card-bg: rgba(255, 255, 255, 0.65);
+
+  --font-heading: 'Fredoka', system-ui, -apple-system, sans-serif;
+  --font-body: 'Nunito', system-ui, -apple-system, sans-serif;
+
+  color-scheme: light;
+}
+
+/* Base Reset & Box Sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background-color: var(--color-cream);
+  color: var(--color-deep);
+  font-family: var(--font-body);
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light;
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-cream);
+  color: var(--color-deep);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Main Container: Mobile first, centered up to 480px on desktop */
+.app-container {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 12px) 16px env(safe-area-inset-bottom, 16px) 16px;
+  position: relative;
+  background-color: var(--color-cream);
+}
+
+/* Header */
+.game-header {
+  padding-top: 6px;
+  padding-bottom: 8px;
+  text-align: center;
+}
+
+.brand-title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.brand-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--color-accent);
+}
+
+/* Milestone 1 Sky Switcher Bar */
+.sky-switcher-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: rgba(47, 93, 80, 0.08);
+  border-radius: 12px;
+  padding: 4px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  gap: 4px;
+}
+
+.sky-tab-btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 6px 10px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-deep);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.sky-tab-btn:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+.sky-tab-btn.active {
+  background-color: #FFFFFF;
+  color: var(--color-deep);
+  box-shadow: 0 2px 6px rgba(47, 93, 80, 0.12);
+}
+
+.sky-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.sky-indicator.day {
+  background: linear-gradient(135deg, #BFE0F0, #E6F3F8);
+  border: 1px solid #99c7dc;
+}
+
+.sky-indicator.sunset {
+  background: linear-gradient(135deg, #6F5A9E, #F8B36A);
+}
+
+.sky-indicator.night {
+  background: linear-gradient(135deg, #16224A, #3B4A7A);
+}
+
+/* Question Section */
+.question-section {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.question-meta {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-subtle);
+  margin-bottom: 4px;
+}
+
+.question-text {
+  font-family: var(--font-heading);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-deep);
+  margin: 0;
+}
+
+/* Scene Wrapper */
+.scene-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 390 / 420;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(47, 93, 80, 0.09);
+  background-color: #E6F3F8;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.game-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+/* SVG Scene Animations */
+.cloud-drift-1 {
+  animation: cloudFloat1 32s ease-in-out infinite alternate;
+}
+.cloud-drift-2 {
+  animation: cloudFloat2 26s ease-in-out infinite alternate;
+}
+
+@keyframes cloudFloat1 {
+  0% { transform: translateX(0px); }
+  100% { transform: translateX(18px); }
+}
+
+@keyframes cloudFloat2 {
+  0% { transform: translateX(0px); }
+  100% { transform: translateX(-14px); }
+}
+
+/* Jumper Pacing Animation on Wooden Plank */
+.jumper-pacing {
+  animation: jumperPacingAnim 4.8s ease-in-out infinite alternate;
+  transform-origin: center bottom;
+}
+
+@keyframes jumperPacingAnim {
+  0% {
+    transform: translateX(-24px);
+  }
+  48% {
+    transform: translateX(24px) scaleX(1);
+  }
+  50% {
+    transform: translateX(24px) scaleX(-1);
+  }
+  98% {
+    transform: translateX(-24px) scaleX(-1);
+  }
+  100% {
+    transform: translateX(-24px) scaleX(1);
+  }
+}
+
+/* Jumper gentle breathing bounce */
+.jumper-body-bob {
+  animation: jumperBob 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes jumperBob {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-1.5px); }
+}
+
+/* Star twinkle */
+.star-twinkle-1 {
+  animation: starTwinkle 2.4s ease-in-out infinite alternate;
+}
+.star-twinkle-2 {
+  animation: starTwinkle 3.2s ease-in-out infinite alternate 1s;
+}
+
+@keyframes starTwinkle {
+  0% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
+/* Readout & Scale Info Panel */
+.readout-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background-color: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.range-display {
+  display: flex;
+  flex-direction: column;
+}
+
+.range-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-subtle);
+}
+
+.range-value {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-deep);
+}
+
+.multiplier-tag {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.multiplier-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-subtle);
+}
+
+.multiplier-badge-text {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+/* Action Section */
+.action-section {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Primary Lock It In Button */
+.btn-lock {
+  min-height: 48px;
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  background-color: var(--color-deep);
+  color: var(--color-cream);
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 12px rgba(47, 93, 80, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-lock:hover {
+  background-color: #24493e;
+  box-shadow: 0 6px 16px rgba(47, 93, 80, 0.28);
+}
+
+.btn-lock:active {
+  transform: scale(0.985);
+}
+
+/* Milestone 1 Palette & Mode Helper */
+.milestone-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(47, 93, 80, 0.05);
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.milestone-badge {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--color-deep);
+}
+
+.palette-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.palette-selector-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-deep);
+}
+
+.palette-btn {
+  border: 1px solid var(--color-border);
+  background: #FFF;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-deep);
+}
+
+.palette-btn.active {
+  background-color: var(--color-deep);
+  color: #FFF;
+  border-color: var(--color-deep);
+}
+
+/* Reduced Motion Support (Section 6, 7) */
+@media (prefers-reduced-motion: reduce) {
+  .cloud-drift-1,
+  .cloud-drift-2,
+  .jumper-pacing,
+  .jumper-body-bob,
+  .star-twinkle-1,
+  .star-twinkle-2 {
+    animation: none !important;
+  }
+}
