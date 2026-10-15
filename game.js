@@ -1,5 +1,5 @@
 /**
- * Tolerate: The Deep Drop — Game Engine (Milestone 1)
+ * Tolerate: The Deep Drop — Game Engine
  * File: game.js
  * Plain JavaScript (no build tools, no frameworks).
  */
@@ -7,10 +7,10 @@
 (function () {
   'use strict';
 
-  // State for Milestone 1
+  // State with Golden palette default (Spec Update #6)
   const state = {
     currentSlot: 1, // 1: Day, 2: Sunset, 3: Night
-    currentPalette: 'meadow',
+    currentPalette: CONFIG.DEFAULT_PALETTE || 'golden',
     question: CONFIG.DEFAULT_QUESTION,
     // Middle 40% starting range (30% to 70% of canyon width)
     rangeRatioMin: 0.30,
@@ -47,7 +47,7 @@
    * Apply palette CSS variables to root
    */
   function applyPalette(paletteKey) {
-    const pal = CONFIG.PALETTES[paletteKey] || CONFIG.PALETTES.meadow;
+    const pal = CONFIG.PALETTES[paletteKey] || CONFIG.PALETTES.golden;
     state.currentPalette = paletteKey;
     const root = document.documentElement;
 
@@ -60,7 +60,7 @@
     root.style.setProperty('--color-wood', pal.woodPlank);
     root.style.setProperty('--color-wood-dark', pal.woodPlankDark);
 
-    // Update active state in palette switcher buttons
+    // Update active state on palette switcher buttons
     document.querySelectorAll('.palette-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.palette === paletteKey);
     });
@@ -89,39 +89,35 @@
   }
 
   /**
-   * Generate Pine Tree SVG path
+   * Generate Pine Tree SVG
    */
-  function drawPineTree(x, baseY, scale = 1, fill = '#2F5D50') {
+  function drawPineTree(x, baseY, scale = 1, fill = '#3D4A2E') {
     const w = 24 * scale;
     const h = 48 * scale;
     const halfW = w / 2;
 
     return `
       <g transform="translate(${x}, ${baseY})">
-        <!-- Trunk -->
-        <rect x="${-2.5 * scale}" y="${-8 * scale}" width="${5 * scale}" height="${8 * scale}" fill="#543823" rx="1" />
-        <!-- Bottom Tier -->
+        <rect x="${-2.5 * scale}" y="${-8 * scale}" width="${5 * scale}" height="${8 * scale}" fill="#4A331E" rx="1" />
         <path d="M ${-halfW} ${-7 * scale} L ${halfW} ${-7 * scale} L ${halfW * 0.7} ${-19 * scale} L ${halfW * 0.85} ${-19 * scale} L 0 ${-34 * scale} L ${-halfW * 0.85} ${-19 * scale} L ${-halfW * 0.7} ${-19 * scale} Z" fill="${fill}" />
-        <!-- Top Tier -->
         <path d="M ${-halfW * 0.65} ${-22 * scale} L ${halfW * 0.65} ${-22 * scale} L 0 ${-h} Z" fill="${fill}" />
-        <!-- Highlight edge -->
-        <path d="M 0 ${-h} L ${halfW * 0.65} ${-22 * scale} L 0 ${-22 * scale} Z" fill="rgba(255,255,255,0.08)" />
+        <path d="M 0 ${-h} L ${halfW * 0.65} ${-22 * scale} L 0 ${-22 * scale} Z" fill="rgba(255,255,255,0.12)" />
       </g>
     `;
   }
 
   /**
-   * Render the complete 390x420 SVG scene
+   * Render the complete 390x420 SVG scene with updated bridge, mattress, and jumper
    */
   function renderScene() {
     const container = document.getElementById('scene-svg-wrapper');
     if (!container) return;
 
     const slotInfo = CONFIG.SLOTS[state.currentSlot] || CONFIG.SLOTS[1];
-    const pal = CONFIG.PALETTES[state.currentPalette] || CONFIG.PALETTES.meadow;
+    const pal = CONFIG.PALETTES[state.currentPalette] || CONFIG.PALETTES.golden;
     const rangeData = calculateRangeValues();
 
-    // Canyon coordinates
+    // Canyon dimensions
     const canyonLeft = CONFIG.CANVAS.LEFT_CLIFF_RIGHT; // 70
     const canyonRight = CONFIG.CANVAS.RIGHT_CLIFF_LEFT; // 320
     const canyonWidth = CONFIG.CANVAS.CANYON_WIDTH; // 250
@@ -132,12 +128,18 @@
     const matWidth = matRight - matLeft;
     const matCenter = matLeft + matWidth / 2;
 
-    const mattressY = 270;
-    const mattressHeight = 18;
-    const plankY = 210;
-    const plankHeight = 7;
+    // Bridge coordinates: spans from cliff to cliff near top
+    const bridgeY = CONFIG.CANVAS.BRIDGE_Y || 146;
+    const bridgeRopeTopY = bridgeY - 14;
 
-    // SVG Defs (Gradients & Filters)
+    // Mattress coordinates: 60% down canyon (~y=308)
+    const mattressY = CONFIG.CANVAS.MATTRESS_Y || 308;
+    const mattressHeight = CONFIG.CANVAS.MATTRESS_HEIGHT || 24;
+
+    // Calculate jumper pacing extent (strictly above the mattress span)
+    const jumperPaceExtent = Math.max(12, (matWidth / 2) - 18);
+
+    // SVG Defs
     const defs = `
       <defs>
         <!-- Sky Gradients -->
@@ -146,267 +148,367 @@
           <stop offset="100%" stop-color="${slotInfo.skyBottom}" />
         </linearGradient>
 
-        <!-- Canyon Abyss & Fog Gradient (Dark at top fading into pale fog at bottom) -->
-        <linearGradient id="canyonAbyssGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#1B3329" stop-opacity="0.95" />
-          <stop offset="25%" stop-color="#2C4E42" stop-opacity="0.85" />
-          <stop offset="65%" stop-color="#7B9E90" stop-opacity="0.65" />
-          <stop offset="90%" stop-color="#E8F1EB" stop-opacity="0.92" />
+        <!-- Canyon Soft Fog Gradient (Spec Update #5: lightened from soft green-gray into pale fog) -->
+        <linearGradient id="canyonFogGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#6B887B" stop-opacity="0.9" />
+          <stop offset="20%" stop-color="#84A396" stop-opacity="0.82" />
+          <stop offset="50%" stop-color="#AEC6BA" stop-opacity="0.75" />
+          <stop offset="78%" stop-color="#DCEAE1" stop-opacity="0.88" />
           <stop offset="100%" stop-color="${pal.creamBg}" stop-opacity="1" />
         </linearGradient>
 
-        <!-- Mattress Gradient -->
-        <linearGradient id="mattressGrad" x1="0" y1="0" x2="0" y2="1">
+        <!-- Mattress Gradient (Crisp, thick pillow-top) -->
+        <linearGradient id="mattressThickGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#FFFFFF" />
-          <stop offset="70%" stop-color="#FBFBFB" />
-          <stop offset="100%" stop-color="#E8ECEF" />
+          <stop offset="15%" stop-color="#FFFFFF" />
+          <stop offset="65%" stop-color="#F7F9FA" />
+          <stop offset="100%" stop-color="#E5EBEE" />
         </linearGradient>
 
-        <!-- Wood Plank Gradient -->
-        <linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${pal.woodPlank}" />
-          <stop offset="100%" stop-color="${pal.woodPlankDark}" />
+        <!-- Mattress Box-Spring Gradient -->
+        <linearGradient id="boxSpringGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#D7DDE2" />
+          <stop offset="100%" stop-color="#B6BFC6" />
         </linearGradient>
 
-        <!-- Soft drop shadow for mattress -->
+        <!-- Wood Texture Gradient for Bridge Planks -->
+        <linearGradient id="bridgeWoodGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${pal.bridgeWood}" />
+          <stop offset="100%" stop-color="#4E2F12" />
+        </linearGradient>
+
+        <!-- Shadow filter -->
         <filter id="softShadow" x="-10%" y="-10%" width="120%" height="130%">
-          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#1C332A" flood-opacity="0.22" />
+          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#2D3B31" flood-opacity="0.18" />
         </filter>
       </defs>
     `;
 
-    // 1. Sky Background
+    // 1. Sky Rect & Background Features
     const skyRect = `<rect x="0" y="0" width="390" height="420" fill="url(#skyGrad)" />`;
 
-    // Sky celestial & cloud details
     let skyFeatures = '';
     if (slotInfo.hasClouds) {
       // Day clouds
       skyFeatures = `
-        <g class="cloud-drift-1" opacity="0.92">
-          <!-- Cloud 1 -->
-          <path d="M 45 68 Q 55 52 72 54 Q 88 44 105 52 Q 120 48 128 62 Q 138 68 132 80 Q 128 88 114 88 L 52 88 Q 38 88 38 78 Q 38 68 45 68 Z" fill="#FFFFFF" />
+        <g class="cloud-drift-1" opacity="0.95">
+          <path d="M 45 48 Q 55 34 72 36 Q 88 26 105 34 Q 120 30 128 44 Q 138 50 132 62 Q 128 68 114 68 L 52 68 Q 38 68 38 58 Q 38 48 45 48 Z" fill="#FFFFFF" />
         </g>
-        <g class="cloud-drift-2" opacity="0.85">
-          <!-- Cloud 2 -->
-          <path d="M 235 90 Q 245 78 260 80 Q 272 70 286 78 Q 298 74 305 85 Q 314 90 308 100 Q 304 108 290 108 L 240 108 Q 228 108 228 98 Q 228 90 235 90 Z" fill="#FFFFFF" />
-          <!-- Cloud 3 Small -->
-          <path d="M 160 38 Q 168 30 180 32 Q 190 26 200 32 Q 208 34 205 44 L 160 44 Q 154 44 154 38 Q 154 34 160 38 Z" fill="#FFFFFF" opacity="0.8" />
+        <g class="cloud-drift-2" opacity="0.88">
+          <path d="M 235 60 Q 245 48 260 50 Q 272 40 286 48 Q 298 44 305 55 Q 314 60 308 70 Q 304 78 290 78 L 240 78 Q 228 78 228 68 Q 228 60 235 60 Z" fill="#FFFFFF" />
+          <path d="M 160 22 Q 168 14 180 16 Q 190 10 200 16 Q 208 18 205 28 L 160 28 Q 154 28 154 22 Z" fill="#FFFFFF" opacity="0.8" />
         </g>
       `;
     } else if (slotInfo.hasSun) {
-      // Sunset: Sun partly behind right cliff
+      // Sunset: Warm sun partly behind right cliff
       skyFeatures = `
-        <circle cx="316" cy="148" r="32" fill="${slotInfo.sunColor}" opacity="0.95" />
-        <circle cx="316" cy="148" r="44" fill="${slotInfo.sunColor}" opacity="0.25" />
-        <path d="M 30 110 Q 120 105 210 115 Q 160 120 30 118 Z" fill="#FAD1A7" opacity="0.45" />
-        <path d="M 120 80 Q 200 75 280 82 Q 220 88 120 86 Z" fill="#E89674" opacity="0.35" />
+        <circle cx="316" cy="115" r="30" fill="${slotInfo.sunColor}" opacity="0.95" />
+        <circle cx="316" cy="115" r="46" fill="${slotInfo.sunColor}" opacity="0.22" />
+        <path d="M 30 70 Q 120 65 210 74 Q 160 80 30 76 Z" fill="#FAD1A7" opacity="0.45" />
+        <path d="M 120 50 Q 200 45 280 52 Q 220 58 120 56 Z" fill="#E89674" opacity="0.35" />
       `;
     } else if (slotInfo.hasMoon) {
       // Night: Moon and stars
       skyFeatures = `
-        <circle cx="82" cy="62" r="20" fill="${slotInfo.moonColor}" />
-        <circle cx="82" cy="62" r="28" fill="${slotInfo.moonColor}" opacity="0.12" />
-        <circle cx="76" cy="58" r="3" fill="#E2DFC8" opacity="0.5" />
-        <circle cx="88" cy="64" r="4.5" fill="#E2DFC8" opacity="0.4" />
-        <circle cx="81" cy="70" r="2.5" fill="#E2DFC8" opacity="0.4" />
+        <circle cx="82" cy="46" r="18" fill="${slotInfo.moonColor}" />
+        <circle cx="82" cy="46" r="26" fill="${slotInfo.moonColor}" opacity="0.14" />
+        <circle cx="76" cy="42" r="2.8" fill="#DCD8BD" opacity="0.45" />
+        <circle cx="88" cy="48" r="4.2" fill="#DCD8BD" opacity="0.35" />
 
         <g class="star-twinkle-1">
-          <circle cx="140" cy="42" r="1.6" fill="#FFFFFF" />
-          <circle cx="210" cy="68" r="1.4" fill="#FFFFFF" />
-          <circle cx="280" cy="45" r="1.8" fill="#FFFFFF" />
-          <circle cx="340" cy="72" r="1.3" fill="#FFFFFF" />
-          <circle cx="175" cy="98" r="1.2" fill="#FFFFFF" />
+          <circle cx="140" cy="32" r="1.6" fill="#FFFFFF" />
+          <circle cx="210" cy="48" r="1.4" fill="#FFFFFF" />
+          <circle cx="280" cy="35" r="1.8" fill="#FFFFFF" />
+          <circle cx="340" cy="52" r="1.3" fill="#FFFFFF" />
+          <circle cx="175" cy="72" r="1.2" fill="#FFFFFF" />
         </g>
         <g class="star-twinkle-2">
-          <circle cx="115" cy="85" r="1.5" fill="#FFFBE6" />
-          <circle cx="245" cy="35" r="1.6" fill="#FFFBE6" />
-          <circle cx="310" cy="105" r="1.4" fill="#FFFBE6" />
-          <circle cx="185" cy="48" r="1.2" fill="#FFFBE6" />
-          <circle cx="65" cy="115" r="1.3" fill="#FFFBE6" />
+          <circle cx="115" cy="65" r="1.5" fill="#FFFBE6" />
+          <circle cx="245" cy="25" r="1.6" fill="#FFFBE6" />
+          <circle cx="310" cy="75" r="1.4" fill="#FFFBE6" />
+          <circle cx="185" cy="38" r="1.2" fill="#FFFBE6" />
         </g>
       `;
     }
 
-    // Distant background mountain silhouettes
+    // Distant mountain silhouette
     const distantHills = `
-      <path d="M 0 165 Q 45 138 90 152 Q 145 130 195 155 Q 260 135 320 158 Q 360 142 390 155 L 390 200 L 0 200 Z" fill="#699E79" opacity="0.45" />
+      <path d="M 0 135 Q 45 118 90 128 Q 145 110 195 130 Q 260 115 320 132 Q 360 120 390 130 L 390 170 L 0 170 Z" fill="#699E79" opacity="0.35" />
     `;
 
-    // 2. Canyon Abyss (width 250, from x=70 to x=320)
-    const canyonAbyss = `
-      <rect x="70" y="172" width="250" height="248" fill="url(#canyonAbyssGrad)" />
-      <path d="M 70 215 Q 110 220 150 218 Q 230 222 320 216" stroke="rgba(25, 45, 36, 0.25)" stroke-width="1.5" fill="none" />
-      <path d="M 70 330 Q 130 336 210 332 Q 280 338 320 332" stroke="rgba(255, 255, 255, 0.4)" stroke-width="2" fill="none" />
-      <path d="M 70 375 Q 160 382 240 376 Q 290 380 320 377" stroke="rgba(255, 255, 255, 0.65)" stroke-width="3" fill="none" />
-      <ellipse cx="195" cy="395" rx="130" ry="22" fill="#FFFFFF" opacity="0.75" />
-      <ellipse cx="180" cy="415" rx="150" ry="25" fill="#FFFFFF" opacity="0.9" />
+    // 2. Lightened Canyon Chasm (Spec Update #5)
+    const canyonChasm = `
+      <rect x="70" y="146" width="250" height="274" fill="url(#canyonFogGrad)" />
+
+      <path d="M 70 200 Q 120 205 180 202 Q 250 208 320 202" stroke="rgba(255, 255, 255, 0.28)" stroke-width="1.5" fill="none" />
+      <path d="M 70 260 Q 140 266 220 262 Q 280 268 320 262" stroke="rgba(255, 255, 255, 0.42)" stroke-width="2" fill="none" />
+      <path d="M 70 330 Q 150 338 230 332 Q 290 336 320 334" stroke="rgba(255, 255, 255, 0.65)" stroke-width="2.5" fill="none" />
+      <path d="M 70 380 Q 160 388 250 382 Q 295 386 320 383" stroke="rgba(255, 255, 255, 0.85)" stroke-width="3" fill="none" />
+
+      <ellipse cx="195" cy="398" rx="130" ry="22" fill="#FFFFFF" opacity="0.82" />
+      <ellipse cx="180" cy="416" rx="150" ry="24" fill="#FFFFFF" opacity="0.95" />
     `;
 
-    // 3. Left and Right Cliffs (#7FB88F)
+    // 3. Left and Right Cliffs (#8FA86B in Golden)
     const leftCliff = `
-      <path d="M -10 135 Q 30 132 55 148 L 70 174 L 70 430 L -10 430 Z" fill="${pal.hills}" />
-      <path d="M 55 148 L 70 174 L 70 430 L 64 430 L 64 178 L 50 152 Z" fill="#5E936D" opacity="0.6" />
-      <path d="M 40 185 L 70 195 L 68 230 L 48 220 Z" fill="#6EA37E" opacity="0.5" />
-      <path d="M 52 260 L 70 270 L 68 310 L 46 295 Z" fill="#5E936D" opacity="0.45" />
-      <path d="M 38 340 L 70 355 L 66 395 L 42 380 Z" fill="#52835F" opacity="0.5" />
-      <path d="M -10 135 Q 30 132 55 148 L 70 174" stroke="#90C99E" stroke-width="3" fill="none" stroke-linecap="round" />
+      <path d="M -10 110 Q 30 108 55 124 L 70 146 L 70 430 L -10 430 Z" fill="${pal.hills}" />
+      <path d="M 55 124 L 70 146 L 70 430 L 64 430 L 64 150 L 50 128 Z" fill="#6B8851" opacity="0.65" />
+      <path d="M 40 165 L 70 175 L 68 205 L 48 198 Z" fill="#7C9862" opacity="0.45" />
+      <path d="M 52 230 L 70 240 L 68 275 L 46 265 Z" fill="#6B8851" opacity="0.45" />
+      <path d="M 38 310 L 70 325 L 66 360 L 42 350 Z" fill="#5F7846" opacity="0.5" />
+      <path d="M -10 110 Q 30 108 55 124 L 70 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
     const rightCliff = `
-      <path d="M 400 130 Q 360 128 335 146 L 320 174 L 320 430 L 400 430 Z" fill="${pal.hills}" />
-      <path d="M 335 146 L 320 174 L 320 430 L 326 430 L 326 178 L 340 150 Z" fill="#5E936D" opacity="0.6" />
-      <path d="M 350 185 L 320 195 L 322 230 L 342 220 Z" fill="#6EA37E" opacity="0.5" />
-      <path d="M 338 260 L 320 270 L 322 310 L 344 295 Z" fill="#5E936D" opacity="0.45" />
-      <path d="M 352 340 L 320 355 L 324 395 L 348 380 Z" fill="#52835F" opacity="0.5" />
-      <path d="M 400 130 Q 360 128 335 146 L 320 174" stroke="#90C99E" stroke-width="3" fill="none" stroke-linecap="round" />
+      <path d="M 400 105 Q 360 104 335 122 L 320 146 L 320 430 L 400 430 Z" fill="${pal.hills}" />
+      <path d="M 335 122 L 320 146 L 320 430 L 326 430 L 326 150 L 340 126 Z" fill="#6B8851" opacity="0.65" />
+      <path d="M 350 165 L 320 175 L 322 205 L 342 198 Z" fill="#7C9862" opacity="0.45" />
+      <path d="M 338 230 L 320 240 L 322 275 L 344 265 Z" fill="#6B8851" opacity="0.45" />
+      <path d="M 352 310 L 320 325 L 324 360 L 348 350 Z" fill="#5F7846" opacity="0.5" />
+      <path d="M 400 105 Q 360 104 335 122 L 320 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
-    // 4. Pine Trees (Identical in every sky)
+    // 4. Pine Trees
     const pineTrees = `
-      <!-- Left Trees -->
-      ${drawPineTree(16, 138, 0.65, pal.deepGreen)}
-      ${drawPineTree(36, 146, 0.75, pal.deepGreen)}
-      ${drawPineTree(18, 172, 0.95, pal.deepGreen)}
-      ${drawPineTree(46, 175, 1.15, pal.deepGreen)}
-      ${drawPineTree(30, 192, 1.0, pal.deepGreen)}
+      <!-- Left Cliff Trees -->
+      ${drawPineTree(16, 114, 0.65, pal.deepGreen)}
+      ${drawPineTree(36, 122, 0.75, pal.deepGreen)}
+      ${drawPineTree(18, 146, 0.95, pal.deepGreen)}
+      ${drawPineTree(44, 150, 1.1, pal.deepGreen)}
+      ${drawPineTree(28, 172, 1.0, pal.deepGreen)}
 
-      <!-- Right Trees -->
-      ${drawPineTree(374, 134, 0.65, pal.deepGreen)}
-      ${drawPineTree(352, 144, 0.75, pal.deepGreen)}
-      ${drawPineTree(372, 172, 0.95, pal.deepGreen)}
-      ${drawPineTree(342, 176, 1.15, pal.deepGreen)}
-      ${drawPineTree(358, 192, 1.0, pal.deepGreen)}
+      <!-- Right Cliff Trees -->
+      ${drawPineTree(374, 110, 0.65, pal.deepGreen)}
+      ${drawPineTree(352, 120, 0.75, pal.deepGreen)}
+      ${drawPineTree(372, 146, 0.95, pal.deepGreen)}
+      ${drawPineTree(344, 150, 1.1, pal.deepGreen)}
+      ${drawPineTree(360, 172, 1.0, pal.deepGreen)}
     `;
 
-    // 5. Cables from cliffs to mattress ends
-    const cables = `
-      <g stroke="${pal.cables}" stroke-width="1.6" stroke-linecap="round">
-        <line x1="70" y1="246" x2="${matLeft}" y2="${mattressY + 8}" />
-        <line x1="320" y1="246" x2="${matRight}" y2="${mattressY + 8}" />
-        <line x1="70" y1="288" x2="${matLeft}" y2="${mattressY + 14}" opacity="0.55" stroke-dasharray="3,3" />
-        <line x1="320" y1="288" x2="${matRight}" y2="${mattressY + 14}" opacity="0.55" stroke-dasharray="3,3" />
-      </g>
-      <circle cx="70" cy="246" r="3.5" fill="#4B585E" />
-      <circle cx="320" cy="246" r="3.5" fill="#4B585E" />
-    `;
+    // 5. Full-Span Rope-and-Plank Wooden Bridge (Spec Update #1)
+    const leftAnchorX = 58;
+    const rightAnchorX = 332;
 
-    // 6. White Mattress (rounded top, quilted piping line, tufted buttons, box spring)
-    const buttonSpacing = matWidth / 5;
-    let buttonsSvg = '';
-    for (let i = 1; i <= 4; i++) {
-      const bx = matLeft + buttonSpacing * i;
-      buttonsSvg += `
-        <circle cx="${bx}" cy="${mattressY + 9}" r="1.8" fill="#CCD3D9" />
-        <circle cx="${bx}" cy="${mattressY + 8.5}" r="1.0" fill="#99A6AF" />
+    const plankCount = 26;
+    const bridgeSpan = canyonRight - canyonLeft; // 250
+    let bridgePlanksSvg = '';
+    let bridgeTicksSvg = '';
+
+    for (let i = 0; i <= plankCount; i++) {
+      const px = canyonLeft + (i / plankCount) * bridgeSpan;
+      const plankColor = i % 2 === 0 ? pal.bridgeWood : '#6A411B';
+      bridgePlanksSvg += `
+        <rect x="${px - 4}" y="${bridgeY - 1}" width="8" height="6" rx="1.2" fill="${plankColor}" stroke="#3D250F" stroke-width="0.7" />
+        <line x1="${px}" y1="${bridgeY}" x2="${px}" y2="${bridgeY + 4}" stroke="#8E5F32" stroke-width="0.8" opacity="0.6" />
+      `;
+
+      if (i % 3 === 0 && i > 0 && i < plankCount) {
+        bridgePlanksSvg += `
+          <line x1="${px}" y1="${bridgeRopeTopY + 2}" x2="${px}" y2="${bridgeY}" stroke="${pal.bridgeRope}" stroke-width="1.2" stroke-dasharray="2,1" />
+        `;
+      }
+    }
+
+    // Number Line Small Tick Marks along the Bridge (Spec Update #2)
+    const tickIntervals = 8; // Every 250 ft
+    for (let t = 0; t <= tickIntervals; t++) {
+      const tx = canyonLeft + (t / tickIntervals) * canyonWidth;
+      const isMajor = t % 2 === 0;
+      const tickH = isMajor ? 6 : 3.5;
+      bridgeTicksSvg += `
+        <line x1="${tx}" y1="${bridgeY + 5}" x2="${tx}" y2="${bridgeY + 5 + tickH}" stroke="${pal.deepGreen}" stroke-width="${isMajor ? 1.6 : 1.1}" stroke-linecap="round" />
       `;
     }
 
-    const mattress = `
-      <g filter="url(#softShadow)">
-        <!-- Thin Box-Spring Base -->
-        <rect x="${matLeft}" y="${mattressY + mattressHeight - 4}" width="${matWidth}" height="5" rx="1.5" fill="#C5CCD1" stroke="#ABB4BC" stroke-width="0.8" />
-
-        <!-- Mattress Body (White, rounded top, side view) -->
-        <rect x="${matLeft}" y="${mattressY}" width="${matWidth}" height="${mattressHeight - 3}" rx="5" fill="url(#mattressGrad)" stroke="${pal.mattressOutline}" stroke-width="1.5" />
-
-        <!-- Quilted Piping Lines -->
-        <path d="M ${matLeft + 4} ${mattressY + 4} Q ${matCenter} ${mattressY + 5.5} ${matRight - 4} ${mattressY + 4}" stroke="#DCE1E5" stroke-width="1.2" fill="none" />
-        <path d="M ${matLeft + 4} ${mattressY + 9} Q ${matCenter} ${mattressY + 10} ${matRight - 4} ${mattressY + 9}" stroke="#E5EAEF" stroke-width="1.2" stroke-dasharray="3,2" fill="none" />
-        <path d="M ${matLeft + 4} ${mattressY + 13} Q ${matCenter} ${mattressY + 14} ${matRight - 4} ${mattressY + 13}" stroke="#D3D9DE" stroke-width="1.2" fill="none" />
-
-        <!-- Tufted Dimple Buttons -->
-        ${buttonsSvg}
-
-        <!-- Orange Handles on ends (44px accessible touch target) -->
-        <g id="handle-left" class="handle-group">
-          <circle cx="${matLeft}" cy="${mattressY + 8}" r="22" fill="transparent" pointer-events="all" />
-          <rect x="${matLeft - 2}" y="${mattressY + 3}" width="4" height="10" rx="1" fill="#D96E1C" />
-          <circle cx="${matLeft}" cy="${mattressY + 8}" r="7.5" fill="${pal.accentOrange}" stroke="#C8580E" stroke-width="1.5" />
-          <circle cx="${matLeft}" cy="${mattressY + 8}" r="4.2" fill="#FFA557" />
-          <circle cx="${matLeft}" cy="${mattressY + 7}" r="1.8" fill="#FFF4E8" />
+    const bridge = `
+      <g id="rope-bridge-assembly">
+        <!-- Left Cliff Timber Post & Braces -->
+        <g id="bridge-anchor-left">
+          <rect x="${leftAnchorX}" y="${bridgeRopeTopY - 8}" width="10" height="34" rx="2" fill="#5A3716" stroke="#36200A" stroke-width="1.2" />
+          <rect x="${leftAnchorX + 2}" y="${bridgeRopeTopY - 6}" width="3" height="30" fill="#7D4F23" />
+          <line x1="${leftAnchorX - 4}" y1="${bridgeY + 12}" x2="${leftAnchorX + 8}" y2="${bridgeRopeTopY}" stroke="#5A3716" stroke-width="3" stroke-linecap="round" />
+          <rect x="${leftAnchorX - 1}" y="${bridgeRopeTopY - 1}" width="12" height="4" rx="1" fill="#2B3439" />
+          <circle cx="${leftAnchorX + 5}" cy="${bridgeRopeTopY + 1}" r="1.5" fill="#C5CFD6" />
+          <rect x="${leftAnchorX - 1}" y="${bridgeY}" width="12" height="4" rx="1" fill="#2B3439" />
+          <circle cx="${leftAnchorX + 5}" cy="${bridgeY + 2}" r="1.5" fill="#C5CFD6" />
         </g>
 
-        <g id="handle-right" class="handle-group">
-          <circle cx="${matRight}" cy="${mattressY + 8}" r="22" fill="transparent" pointer-events="all" />
-          <rect x="${matRight - 2}" y="${mattressY + 3}" width="4" height="10" rx="1" fill="#D96E1C" />
-          <circle cx="${matRight}" cy="${mattressY + 8}" r="7.5" fill="${pal.accentOrange}" stroke="#C8580E" stroke-width="1.5" />
-          <circle cx="${matRight}" cy="${mattressY + 8}" r="4.2" fill="#FFA557" />
-          <circle cx="${matRight}" cy="${mattressY + 7}" r="1.8" fill="#FFF4E8" />
+        <!-- Right Cliff Timber Post & Braces -->
+        <g id="bridge-anchor-right">
+          <rect x="${rightAnchorX - 10}" y="${bridgeRopeTopY - 8}" width="10" height="34" rx="2" fill="#5A3716" stroke="#36200A" stroke-width="1.2" />
+          <rect x="${rightAnchorX - 8}" y="${bridgeRopeTopY - 6}" width="3" height="30" fill="#7D4F23" />
+          <line x1="${rightAnchorX + 4}" y1="${bridgeY + 12}" x2="${rightAnchorX - 8}" y2="${bridgeRopeTopY}" stroke="#5A3716" stroke-width="3" stroke-linecap="round" />
+          <rect x="${rightAnchorX - 11}" y="${bridgeRopeTopY - 1}" width="12" height="4" rx="1" fill="#2B3439" />
+          <circle cx="${rightAnchorX - 5}" cy="${bridgeRopeTopY + 1}" r="1.5" fill="#C5CFD6" />
+          <rect x="${rightAnchorX - 11}" y="${bridgeY}" width="12" height="4" rx="1" fill="#2B3439" />
+          <circle cx="${rightAnchorX - 5}" cy="${bridgeY + 2}" r="1.5" fill="#C5CFD6" />
+        </g>
+
+        <!-- Lower Walkway Under-Beams -->
+        <path d="M ${leftAnchorX + 5} ${bridgeY + 3} Q 195 ${bridgeY + 6} ${rightAnchorX - 5} ${bridgeY + 3}" stroke="#4D2E12" stroke-width="4.5" fill="none" stroke-linecap="round" />
+
+        <!-- Bridge Wooden Planks -->
+        <g id="bridge-walkway-planks">
+          ${bridgePlanksSvg}
+        </g>
+
+        <!-- Top Handrail Ropes -->
+        <path d="M ${leftAnchorX + 5} ${bridgeRopeTopY + 1} Q 195 ${bridgeRopeTopY + 4} ${rightAnchorX - 5} ${bridgeRopeTopY + 1}" stroke="${pal.bridgeRope}" stroke-width="2.6" fill="none" stroke-linecap="round" />
+        <path d="M ${leftAnchorX + 5} ${bridgeRopeTopY + 3} Q 195 ${bridgeRopeTopY + 6} ${rightAnchorX - 5} ${bridgeRopeTopY + 3}" stroke="#8B6638" stroke-width="1.2" fill="none" opacity="0.65" />
+
+        <!-- Number Line Ticks along the bridge -->
+        <g id="bridge-numberline-ticks">
+          ${bridgeTicksSvg}
         </g>
       </g>
     `;
 
-    // 7. Multiplier floating above mattress
-    const multiplierDisplay = `
-      <g transform="translate(${matCenter}, ${mattressY - 14})">
-        <rect x="-24" y="-12" width="48" height="20" rx="6" fill="#FFFFFF" stroke="${pal.deepGreen}" stroke-width="1.4" opacity="0.95" />
-        <text x="0" y="2" text-anchor="middle" dominant-baseline="central" font-family="${CONFIG.PALETTES.meadow.fontHeading || 'Fredoka, sans-serif'}" font-size="12" font-weight="700" fill="${pal.deepGreen}">
-          ${rangeData.multiplier}x
-        </text>
+    // 6. High-Contrast Cream Pills for Number Line Labels (Spec Update #2 & #7)
+    const numberLinePills = `
+      <g id="number-line-pills" font-family="'Fredoka', system-ui, sans-serif" font-size="12" font-weight="700">
+        <!-- Left Pill Label (0 ft) -->
+        <g transform="translate(68, ${bridgeRopeTopY - 14})">
+          <rect x="-24" y="-12" width="48" height="22" rx="11" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
+          <text x="0" y="2" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
+            ${formatNum(state.question.scale_min)} ${state.question.unit}
+          </text>
+        </g>
+
+        <!-- Right Pill Label (2,000 ft) -->
+        <g transform="translate(320, ${bridgeRopeTopY - 14})">
+          <rect x="-34" y="-12" width="68" height="22" rx="11" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
+          <text x="0" y="2" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
+            ${formatNum(state.question.scale_max)} ${state.question.unit}
+          </text>
+        </g>
       </g>
     `;
 
-    // 8. Wooden Plank above the mattress
-    const plank = `
-      <g>
-        <rect x="${matLeft}" y="${plankY}" width="${matWidth}" height="${plankHeight}" rx="2" fill="url(#woodGrad)" stroke="${pal.woodPlankDark}" stroke-width="1" />
-        <line x1="${matLeft + 6}" y1="${plankY + 2.5}" x2="${matRight - 8}" y2="${plankY + 2.5}" stroke="#C78A52" stroke-width="1" stroke-linecap="round" />
-        <line x1="${matLeft + 12}" y1="${plankY + 4.5}" x2="${matRight - 16}" y2="${plankY + 4.5}" stroke="${pal.woodPlankDark}" stroke-width="0.8" stroke-dasharray="8,6" />
-        <line x1="${matLeft + 2}" y1="${plankY + 1}" x2="${matRight - 2}" y2="${plankY + 1}" stroke="#DCA26D" stroke-width="0.8" />
-      </g>
-    `;
-
-    // 9. Human Jumper (helmet, goggles, orange jumpsuit, dark pants, boots)
+    // 7. Human Jumper (Spec Update #3: Stands on the bridge, ~30% bigger, paces only over mattress span)
     const jumper = `
-      <g transform="translate(${matCenter}, ${plankY})">
+      <g id="jumper-container" transform="translate(${matCenter}, ${bridgeY})" style="--jumper-pace-extent: ${jumperPaceExtent}px;">
         <g class="jumper-pacing">
-          <g class="jumper-body-bob" transform="translate(0, 0)">
-            <ellipse cx="0" cy="0" rx="7" ry="2" fill="#4A2E16" opacity="0.4" />
-            <rect x="-6" y="-5" width="4" height="5" rx="1.5" fill="#1C1815" />
-            <rect x="2" y="-5" width="4" height="5" rx="1.5" fill="#1C1815" />
-            <path d="M -5.5 -15 L -2 -15 L -2 -5 L -5.5 -5 Z" fill="#243038" />
-            <path d="M 2 -15 L 5.5 -15 L 5.5 -5 L 2 -5 Z" fill="#243038" />
-            <rect x="-6.5" y="-17" width="13" height="2.5" fill="#161E22" rx="0.5" />
-            <rect x="-1.5" y="-17" width="3" height="2.5" fill="#D9822B" rx="0.5" />
+          <!-- 30% bigger scale (1.30) -->
+          <g transform="scale(1.30)">
+            <g class="jumper-body-bob">
+              <!-- Shadow on bridge planks -->
+              <ellipse cx="0" cy="0" rx="7.5" ry="2.2" fill="#2E1B0B" opacity="0.5" />
 
-            <path d="M -6.5 -28 L 6.5 -28 L 5.5 -17 L -5.5 -17 Z" fill="${pal.accentOrange}" />
-            <line x1="0" y1="-28" x2="0" y2="-17" stroke="#C45607" stroke-width="1" />
-            <path d="M -2.5 -28 L 0 -25 L 2.5 -28" stroke="#FFE0C2" stroke-width="0.8" fill="none" />
+              <!-- Boots -->
+              <rect x="-6" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
+              <rect x="1.8" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
+              <line x1="-6" y1="-1" x2="-1.8" y2="-1" stroke="#3D3025" stroke-width="1" />
+              <line x1="1.8" y1="-1" x2="6" y2="-1" stroke="#3D3025" stroke-width="1" />
 
-            <path d="M -6.5 -27 Q -9 -21 -7 -16" stroke="${pal.accentOrange}" stroke-width="2.6" stroke-linecap="round" fill="none" />
-            <path d="M 6.5 -27 Q 9 -21 7 -16" stroke="${pal.accentOrange}" stroke-width="2.6" stroke-linecap="round" fill="none" />
-            <circle cx="-7" cy="-15" r="1.5" fill="#FAD1A7" />
-            <circle cx="7" cy="-15" r="1.5" fill="#FAD1A7" />
+              <!-- Dark Pants -->
+              <path d="M -5.5 -15 L -1.8 -15 L -1.8 -5 L -5.5 -5 Z" fill="#243038" />
+              <path d="M 1.8 -15 L 5.5 -15 L 5.5 -5 L 1.8 -5 Z" fill="#243038" />
+              <!-- Belt -->
+              <rect x="-6.5" y="-17.5" width="13" height="2.6" fill="#161E22" rx="0.5" />
+              <rect x="-1.5" y="-17.5" width="3" height="2.6" fill="#D9822B" rx="0.5" />
 
-            <rect x="-2" y="-30" width="4" height="3" fill="#FAD1A7" />
-            <ellipse cx="0" cy="-33" rx="6.5" ry="5.5" fill="#FFFFFF" stroke="#D3DCE2" stroke-width="0.8" />
-            <path d="M -6.5 -33 Q 0 -38 6.5 -33" fill="#FFFFFF" />
-            <path d="M -6 -32 Q 0 -31 6 -32" stroke="#B8C4CC" stroke-width="1.2" fill="none" />
+              <!-- Orange Jumpsuit Torso -->
+              <path d="M -6.8 -28.5 L 6.8 -28.5 L 5.5 -17.5 L -5.5 -17.5 Z" fill="${pal.accentOrange}" />
+              <line x1="0" y1="-28.5" x2="0" y2="-17.5" stroke="#9E3011" stroke-width="1.1" />
+              <path d="M -2.5 -28.5 L 0 -25.5 L 2.5 -28.5" stroke="#FFE4D6" stroke-width="0.8" fill="none" />
 
-            <rect x="-6.2" y="-33.5" width="12.4" height="2.2" rx="0.8" fill="#1C272E" />
-            <rect x="-4.5" y="-34.5" width="4" height="3.5" rx="1.2" fill="#4FA3C7" stroke="#1C272E" stroke-width="0.7" />
-            <rect x="0.5" y="-34.5" width="4" height="3.5" rx="1.2" fill="#4FA3C7" stroke="#1C272E" stroke-width="0.7" />
-            <line x1="-3.5" y1="-34" x2="-1.5" y2="-32" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
-            <line x1="1.5" y1="-34" x2="3.5" y2="-32" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
-            <path d="M -3.5 -31 Q 0 -28.5 3.5 -31 Z" fill="#FAD1A7" />
+              <!-- Arms in Jumpsuit -->
+              <path d="M -6.8 -27.5 Q -9.5 -21 -7.5 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+              <path d="M 6.8 -27.5 Q 9.5 -21 7.5 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+              <circle cx="-7.5" cy="-15" r="1.6" fill="#FAD1A7" />
+              <circle cx="7.5" cy="-15" r="1.6" fill="#FAD1A7" />
+
+              <!-- Neck -->
+              <rect x="-2" y="-30.5" width="4" height="3" fill="#FAD1A7" />
+
+              <!-- Helmet -->
+              <ellipse cx="0" cy="-33.5" rx="6.8" ry="5.8" fill="#FFFFFF" stroke="#CCD5DC" stroke-width="0.8" />
+              <path d="M -6.8 -33.5 Q 0 -38.8 6.8 -33.5" fill="#FFFFFF" />
+              <path d="M -6.2 -32.5 Q 0 -31.5 6.2 -32.5" stroke="#B8C4CC" stroke-width="1.2" fill="none" />
+
+              <!-- Goggles -->
+              <rect x="-6.5" y="-34.2" width="13" height="2.4" rx="0.8" fill="#1C272E" />
+              <rect x="-4.8" y="-35.2" width="4.2" height="3.6" rx="1.2" fill="#3B92B8" stroke="#1C272E" stroke-width="0.7" />
+              <rect x="0.6" y="-35.2" width="4.2" height="3.6" rx="1.2" fill="#3B92B8" stroke="#1C272E" stroke-width="0.7" />
+              <line x1="-3.8" y1="-34.5" x2="-1.8" y2="-32.8" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
+              <line x1="1.6" y1="-34.5" x2="3.6" y2="-32.8" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
+
+              <!-- Face & Chin -->
+              <path d="M -3.5 -31.5 Q 0 -29 3.5 -31.5 Z" fill="#FAD1A7" />
+            </g>
           </g>
         </g>
       </g>
     `;
 
-    // 10. Number-line labels (scale_min on the left, scale_max on the right)
-    const numberLineLabels = `
-      <g font-family="Fredoka, sans-serif" font-size="12" font-weight="600" fill="${pal.deepGreen}">
-        <line x1="70" y1="172" x2="70" y2="182" stroke="${pal.deepGreen}" stroke-width="2" stroke-linecap="round" />
-        <text x="70" y="196" text-anchor="middle">${formatNum(state.question.scale_min)} ${state.question.unit}</text>
+    // 8. Thick White Mattress lower down the canyon (Spec Update #4: ~60% down)
+    const buttonSpacing = matWidth / 6;
+    let mattressTufts = '';
+    for (let b = 1; b <= 5; b++) {
+      const bx = matLeft + buttonSpacing * b;
+      mattressTufts += `
+        <circle cx="${bx}" cy="${mattressY + 11}" r="2" fill="#D0D7DC" />
+        <circle cx="${bx}" cy="${mattressY + 10.5}" r="1.1" fill="#A8B4BD" />
+      `;
+    }
 
-        <line x1="320" y1="172" x2="320" y2="182" stroke="${pal.deepGreen}" stroke-width="2" stroke-linecap="round" />
-        <text x="320" y="196" text-anchor="middle">${formatNum(state.question.scale_max)} ${state.question.unit}</text>
+    // Suspension cables from canyon walls to mattress ends
+    const cables = `
+      <g stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round">
+        <line x1="${canyonLeft}" y1="230" x2="${matLeft}" y2="${mattressY + 10}" />
+        <line x1="${canyonRight}" y1="230" x2="${matRight}" y2="${mattressY + 10}" />
+        <line x1="${canyonLeft}" y1="335" x2="${matLeft}" y2="${mattressY + 20}" opacity="0.6" stroke-dasharray="3,3" />
+        <line x1="${canyonRight}" y1="335" x2="${matRight}" y2="${mattressY + 20}" opacity="0.6" stroke-dasharray="3,3" />
+      </g>
+      <circle cx="${canyonLeft}" cy="230" r="3.5" fill="#3D4A47" />
+      <circle cx="${canyonRight}" cy="230" r="3.5" fill="#3D4A47" />
+    `;
+
+    // Thick White Mattress body & Small Orange Handles
+    const mattress = `
+      <g id="mattress-group" filter="url(#softShadow)">
+        <!-- Box-Spring Base -->
+        <rect x="${matLeft}" y="${mattressY + mattressHeight - 5}" width="${matWidth}" height="5" rx="1.5" fill="url(#boxSpringGrad)" stroke="#9CA7AF" stroke-width="0.8" />
+
+        <!-- Thick Mattress Body -->
+        <rect x="${matLeft}" y="${mattressY}" width="${matWidth}" height="${mattressHeight - 4}" rx="6" fill="url(#mattressThickGrad)" stroke="${pal.mattressOutline}" stroke-width="1.6" />
+
+        <!-- Quilted Pillow-Top Piping / Stitch Lines -->
+        <path d="M ${matLeft + 4} ${mattressY + 5} Q ${matCenter} ${mattressY + 7} ${matRight - 4} ${mattressY + 5}" stroke="#D7DEE3" stroke-width="1.4" fill="none" />
+        <path d="M ${matLeft + 4} ${mattressY + 11} Q ${matCenter} ${mattressY + 12.5} ${matRight - 4} ${mattressY + 11}" stroke="#E6ECF0" stroke-width="1.2" stroke-dasharray="3,2.5" fill="none" />
+        <path d="M ${matLeft + 4} ${mattressY + 16} Q ${matCenter} ${mattressY + 17.5} ${matRight - 4} ${mattressY + 16}" stroke="#D1D9DF" stroke-width="1.4" fill="none" />
+
+        <!-- Tufted Buttons -->
+        ${mattressTufts}
+
+        <!-- Small Handles on ends with 44px thumb hitboxes -->
+        <g id="handle-left">
+          <circle cx="${matLeft}" cy="${mattressY + 10}" r="22" fill="transparent" pointer-events="all" />
+          <rect x="${matLeft - 3}" y="${mattressY + 6}" width="3" height="8" rx="1" fill="#9C3A12" />
+          <circle cx="${matLeft - 1}" cy="${mattressY + 10}" r="5" fill="${pal.accentOrange}" stroke="#9C3A12" stroke-width="1.2" />
+          <circle cx="${matLeft - 1}" cy="${mattressY + 10}" r="2.4" fill="#FFA57D" />
+        </g>
+
+        <g id="handle-right">
+          <circle cx="${matRight}" cy="${mattressY + 10}" r="22" fill="transparent" pointer-events="all" />
+          <rect x="${matRight}" y="${mattressY + 6}" width="3" height="8" rx="1" fill="#9C3A12" />
+          <circle cx="${matRight + 1}" cy="${mattressY + 10}" r="5" fill="${pal.accentOrange}" stroke="#9C3A12" stroke-width="1.2" />
+          <circle cx="${matRight + 1}" cy="${mattressY + 10}" r="2.4" fill="#FFA57D" />
+        </g>
       </g>
     `;
 
-    // 11. Whole-scene atmospheric tint overlay if active
+    // 9. Multiplier floating above mattress (Cream pill with 4.5:1+ contrast)
+    const multiplierDisplay = `
+      <g transform="translate(${matCenter}, ${mattressY - 16})">
+        <rect x="-24" y="-12" width="48" height="22" rx="11" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
+        <text x="0" y="2" text-anchor="middle" dominant-baseline="central" font-family="'Fredoka', system-ui, sans-serif" font-size="12" font-weight="700" fill="${pal.accentOrange}">
+          ${rangeData.multiplier}x
+        </text>
+      </g>
+    `;
+
+    // 10. Atmospheric tint overlay if active
     let tintOverlay = '';
     if (slotInfo.tintOpacity > 0) {
       tintOverlay = `
@@ -429,16 +531,16 @@
         ${skyRect}
         ${skyFeatures}
         ${distantHills}
-        ${canyonAbyss}
+        ${canyonChasm}
         ${leftCliff}
         ${rightCliff}
         ${pineTrees}
+        ${bridge}
+        ${numberLinePills}
+        ${jumper}
         ${cables}
         ${mattress}
         ${multiplierDisplay}
-        ${plank}
-        ${jumper}
-        ${numberLineLabels}
         ${tintOverlay}
       </svg>
     `;
@@ -488,12 +590,12 @@
       });
     });
 
-    // Lock button feedback for Milestone 1 preview
+    // Lock button feedback for preview
     const lockBtn = document.getElementById('btn-lock-in');
     if (lockBtn) {
       lockBtn.addEventListener('click', () => {
         const data = calculateRangeValues();
-        const msg = `Range locked at: ${formatNum(data.lo)} – ${formatNum(data.hi)} ${state.question.unit} (${data.multiplier}x multiplier).\n\nIn Milestone 2, handles will be draggable by thumb and mouse!`;
+        const msg = `Range locked at: ${formatNum(data.lo)} – ${formatNum(data.hi)} ${state.question.unit} (${data.multiplier}x multiplier).`;
         console.log(msg);
       });
     }
@@ -514,7 +616,7 @@
     init();
   }
 
-  // Expose API for testing
+  // Expose API for inspection and testing
   window.TolerateGame = {
     setSlot,
     applyPalette,
