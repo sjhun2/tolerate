@@ -9,7 +9,7 @@ const CONFIG = {
   BASE_POINTS: 100,
   LAUNCH_DATE: '2026-10-15',
   MAX_MULTIPLIER: 50,
-  DEFAULT_PALETTE: 'golden', // Golden is now default (Spec update #6)
+  DEFAULT_PALETTE: 'golden', // Golden default
 
   // Color palettes specified in spec section 6
   PALETTES: {
@@ -17,14 +17,18 @@ const CONFIG = {
       id: 'golden',
       name: 'Golden (Default)',
       hills: '#8FA86B',
+      hillsDark: '#6F8A4F',
       deepGreen: '#3D4A2E',
       creamBg: '#FFF6E5',
       accentOrange: '#E4572E',
+      strapStitch: '#9E2E0D',
       mattress: '#FFFFFF',
       mattressOutline: '#C9CED2',
       woodPlank: '#8B5A2B',
       woodPlankDark: '#5C3814',
-      cables: '#7B8C8A',
+      cables: '#60706D',
+      buckle: '#7F8E96',
+      buckleHighlight: '#D2DCE2',
       bridgeWood: '#7A4B22',
       bridgeRope: '#C29864',
     },
@@ -32,14 +36,18 @@ const CONFIG = {
       id: 'meadow',
       name: 'Meadow',
       hills: '#7FB88F',
+      hillsDark: '#5D946D',
       deepGreen: '#2F5D50',
       creamBg: '#FFF8EC',
       accentOrange: '#F28C38',
+      strapStitch: '#A94E10',
       mattress: '#FFFFFF',
       mattressOutline: '#C9CED2',
       woodPlank: '#9C6638',
       woodPlankDark: '#7A4C25',
-      cables: '#8C9BA2',
+      cables: '#667875',
+      buckle: '#7F8E96',
+      buckleHighlight: '#D2DCE2',
       bridgeWood: '#8A562B',
       bridgeRope: '#C7A274',
     },
@@ -47,14 +55,18 @@ const CONFIG = {
       id: 'mint',
       name: 'Mint',
       hills: '#A8D5BA',
+      hillsDark: '#7AA88C',
       deepGreen: '#1F3D36',
       creamBg: '#FFFFFF',
       accentOrange: '#FF6B6B',
+      strapStitch: '#BD3B3B',
       mattress: '#FFFFFF',
       mattressOutline: '#C9CED2',
       woodPlank: '#8C6239',
       woodPlankDark: '#614022',
-      cables: '#829B93',
+      cables: '#647D76',
+      buckle: '#7F8E96',
+      buckleHighlight: '#D2DCE2',
       bridgeWood: '#795028',
       bridgeRope: '#B5946A',
     },
@@ -64,7 +76,8 @@ const CONFIG = {
   SLOTS: {
     1: {
       slot: 1,
-      name: 'Slot 1 · Daytime',
+      name: 'Day',
+      label: 'Slot 1 · Day',
       skyTop: '#BFE0F0',
       skyBottom: '#E6F3F8',
       hasClouds: true,
@@ -76,7 +89,8 @@ const CONFIG = {
     },
     2: {
       slot: 2,
-      name: 'Slot 2 · Sunset',
+      name: 'Sunset',
+      label: 'Slot 2 · Sunset',
       skyTop: '#6F5A9E',
       skyBottom: '#F8B36A',
       sunColor: '#FFE3A3',
@@ -89,7 +103,8 @@ const CONFIG = {
     },
     3: {
       slot: 3,
-      name: 'Slot 3 · Night',
+      name: 'Night',
+      label: 'Slot 3 · Night',
       skyTop: '#16224A',
       skyBottom: '#3B4A7A',
       moonColor: '#F4F1DE',
@@ -102,7 +117,7 @@ const CONFIG = {
     },
   },
 
-  // Default question for Milestone 1 preview
+  // Default question for preview
   DEFAULT_QUESTION: {
     id: 'demo-slot-1',
     slot: 1,
@@ -115,7 +130,7 @@ const CONFIG = {
     true_answer: 1083,
   },
 
-  // Canyon & scene geometry on 390x420 viewBox
+  // Canyon & scene geometry
   CANVAS: {
     WIDTH: 390,
     HEIGHT: 420,
@@ -124,14 +139,15 @@ const CONFIG = {
     CANYON_WIDTH: 250, // 320 - 70 = 250
     DEFAULT_RATIO: 0.40, // Middle 40% of scale
 
-    // Bridge vertical placement (spans from cliff to cliff)
+    // Bridge vertical placement
     BRIDGE_Y: 146,
     BRIDGE_LEFT: 56,
     BRIDGE_RIGHT: 334,
 
-    // Mattress vertical placement (about 60% down the canyon chasm)
-    MATTRESS_Y: 308,
-    MATTRESS_HEIGHT: 24,
+    // Mattress vertical placement: 60% down canyon, 20% thicker
+    MATTRESS_Y: 304,
+    MATTRESS_HEIGHT: 29, // 20% thicker than previous 24px
+    STRAP_WIDTH: 9,      // Narrow 8-10px fabric strap
   },
 };
 
