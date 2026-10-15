@@ -9,12 +9,28 @@ const CONFIG = {
   BASE_POINTS: 100,
   LAUNCH_DATE: '2026-10-15',
   MAX_MULTIPLIER: 50,
+  DEFAULT_PALETTE: 'golden', // Golden is now default (Spec update #6)
 
   // Color palettes specified in spec section 6
   PALETTES: {
+    golden: {
+      id: 'golden',
+      name: 'Golden (Default)',
+      hills: '#8FA86B',
+      deepGreen: '#3D4A2E',
+      creamBg: '#FFF6E5',
+      accentOrange: '#E4572E',
+      mattress: '#FFFFFF',
+      mattressOutline: '#C9CED2',
+      woodPlank: '#8B5A2B',
+      woodPlankDark: '#5C3814',
+      cables: '#7B8C8A',
+      bridgeWood: '#7A4B22',
+      bridgeRope: '#C29864',
+    },
     meadow: {
       id: 'meadow',
-      name: 'Meadow (Default)',
+      name: 'Meadow',
       hills: '#7FB88F',
       deepGreen: '#2F5D50',
       creamBg: '#FFF8EC',
@@ -24,6 +40,8 @@ const CONFIG = {
       woodPlank: '#9C6638',
       woodPlankDark: '#7A4C25',
       cables: '#8C9BA2',
+      bridgeWood: '#8A562B',
+      bridgeRope: '#C7A274',
     },
     mint: {
       id: 'mint',
@@ -34,22 +52,11 @@ const CONFIG = {
       accentOrange: '#FF6B6B',
       mattress: '#FFFFFF',
       mattressOutline: '#C9CED2',
-      woodPlank: '#9C6638',
-      woodPlankDark: '#7A4C25',
-      cables: '#8C9BA2',
-    },
-    golden: {
-      id: 'golden',
-      name: 'Golden',
-      hills: '#8FA86B',
-      deepGreen: '#3D4A2E',
-      creamBg: '#FFF6E5',
-      accentOrange: '#E4572E',
-      mattress: '#FFFFFF',
-      mattressOutline: '#C9CED2',
-      woodPlank: '#9C6638',
-      woodPlankDark: '#7A4C25',
-      cables: '#8C9BA2',
+      woodPlank: '#8C6239',
+      woodPlankDark: '#614022',
+      cables: '#829B93',
+      bridgeWood: '#795028',
+      bridgeRope: '#B5946A',
     },
   },
 
@@ -72,9 +79,9 @@ const CONFIG = {
       name: 'Slot 2 · Sunset',
       skyTop: '#6F5A9E',
       skyBottom: '#F8B36A',
+      sunColor: '#FFE3A3',
       hasClouds: false,
       hasSun: true,
-      sunColor: '#FFE3A3',
       hasMoon: false,
       hasStars: false,
       tintColor: '#FF8A3D',
@@ -85,17 +92,17 @@ const CONFIG = {
       name: 'Slot 3 · Night',
       skyTop: '#16224A',
       skyBottom: '#3B4A7A',
+      moonColor: '#F4F1DE',
       hasClouds: false,
       hasSun: false,
       hasMoon: true,
-      moonColor: '#F4F1DE',
       hasStars: true,
       tintColor: '#0B1530',
       tintOpacity: 0.40,
     },
   },
 
-  // Default question for Milestone 1 static preview
+  // Default question for Milestone 1 preview
   DEFAULT_QUESTION: {
     id: 'demo-slot-1',
     slot: 1,
@@ -108,7 +115,7 @@ const CONFIG = {
     true_answer: 1083,
   },
 
-  // Canyon geometry on 390x420 viewBox
+  // Canyon & scene geometry on 390x420 viewBox
   CANVAS: {
     WIDTH: 390,
     HEIGHT: 420,
@@ -116,6 +123,15 @@ const CONFIG = {
     RIGHT_CLIFF_LEFT: 320,
     CANYON_WIDTH: 250, // 320 - 70 = 250
     DEFAULT_RATIO: 0.40, // Middle 40% of scale
+
+    // Bridge vertical placement (spans from cliff to cliff)
+    BRIDGE_Y: 146,
+    BRIDGE_LEFT: 56,
+    BRIDGE_RIGHT: 334,
+
+    // Mattress vertical placement (about 60% down the canyon chasm)
+    MATTRESS_Y: 308,
+    MATTRESS_HEIGHT: 24,
   },
 };
 
