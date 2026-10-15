@@ -14,72 +14,82 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main class="app-container">
-      <!-- Header -->
-      <header class="game-header">
-        <h1 class="brand-title">
+    <!-- Full-Screen Atmospheric Tint Overlay (Sunset warm tint / Night dark tint) -->
+    <div class="fullscreen-tint-overlay" aria-hidden="true"></div>
+
+    <main class="game-viewport">
+      <!-- Floating Top Card: Brand Title & Question -->
+      <header class="floating-card-top" aria-label="Question Details">
+        <div class="brand-title">
           <span>TOLERATE</span>
           <span class="brand-dot" aria-hidden="true"></span>
           <span>THE DEEP DROP</span>
-        </h1>
-
-        <!-- Sky Preview Switcher (Slot 1: Day, Slot 2: Sunset, Slot 3: Night) -->
-        <nav class="sky-switcher-bar" aria-label="Sky slots">
-          <button type="button" class="sky-tab-btn active" data-slot="1" title="Slot 1: Daytime Sky">
-            <span class="sky-indicator day"></span>
-            <span>Slot 1 · Day</span>
-          </button>
-          <button type="button" class="sky-tab-btn" data-slot="2" title="Slot 2: Sunset Sky">
-            <span class="sky-indicator sunset"></span>
-            <span>Slot 2 · Sunset</span>
-          </button>
-          <button type="button" class="sky-tab-btn" data-slot="3" title="Slot 3: Night Sky">
-            <span class="sky-indicator night"></span>
-            <span>Slot 3 · Night</span>
-          </button>
-        </nav>
+        </div>
+        <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
+        <h1 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h1>
       </header>
 
-      <!-- Question Card Section -->
-      <section class="question-section" aria-live="polite">
-        <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
-        <h2 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h2>
-      </section>
-
-      <!-- Canyon Scene (SVG 390x420 viewBox) -->
-      <div id="scene-svg-wrapper" class="scene-container">
+      <!-- Central Full-Height Canyon Scene (Edge-to-Edge landscape) -->
+      <div id="scene-svg-wrapper" class="scene-canvas-wrapper" aria-label="Canyon Play Area">
         <!-- SVG rendered dynamically by game.js -->
       </div>
 
-      <!-- Range & Multiplier Readout Panel -->
-      <section class="readout-panel" aria-label="Current Range and Multiplier">
-        <div class="range-display">
-          <span class="range-label">Chosen Range</span>
-          <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
+      <!-- Floating Bottom Card: Range Readout, Multiplier, and Lock Button -->
+      <section class="floating-card-bottom" aria-label="Controls and Range Selection">
+        <div class="readout-panel">
+          <div class="range-display">
+            <span class="range-label">Chosen Range</span>
+            <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
+          </div>
+          <div class="multiplier-tag">
+            <span class="multiplier-label">Multiplier</span>
+            <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
+          </div>
         </div>
-        <div class="multiplier-tag">
-          <span class="multiplier-label">Multiplier</span>
-          <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
-        </div>
-      </section>
 
-      <!-- Action Section -->
-      <section class="action-section">
         <button id="btn-lock-in" type="button" class="btn-lock">
           Lock it in
         </button>
+      </section>
 
-        <!-- Palette Swapper (Golden default) -->
-        <div class="milestone-info">
-          <div class="milestone-badge">Screen Design Updated · Milestone 1</div>
-          <div class="palette-selector-row">
-            <span class="palette-selector-label">Palette:</span>
-            <button type="button" class="palette-btn active" data-palette="golden">Golden (Default)</button>
-            <button type="button" class="palette-btn" data-palette="meadow">Meadow</button>
-            <button type="button" class="palette-btn" data-palette="mint">Mint</button>
+      <!-- Floating Corner Test Panel: Compact box for testing Skies & Palettes -->
+      <aside class="corner-test-panel" aria-label="Developer Preview Controls">
+        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies and Palettes">
+          <span>⚙️ Skies & Theme</span>
+        </button>
+
+        <div id="corner-popup-content" class="corner-popup-content hidden">
+          <div>
+            <div class="test-section-title">Sky Slots:</div>
+            <div class="test-btn-group">
+              <button type="button" class="test-pill-btn sky-pill-btn active" data-slot="1">
+                <span class="sky-dot day"></span> Day
+              </button>
+              <button type="button" class="test-pill-btn sky-pill-btn" data-slot="2">
+                <span class="sky-dot sunset"></span> Sunset
+              </button>
+              <button type="button" class="test-pill-btn sky-pill-btn" data-slot="3">
+                <span class="sky-dot night"></span> Night
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div class="test-section-title">Palette:</div>
+            <div class="test-btn-group">
+              <button type="button" class="test-pill-btn palette-pill-btn active" data-palette="golden">
+                Golden
+              </button>
+              <button type="button" class="test-pill-btn palette-pill-btn" data-palette="meadow">
+                Meadow
+              </button>
+              <button type="button" class="test-pill-btn palette-pill-btn" data-palette="mint">
+                Mint
+              </button>
+            </div>
           </div>
         </div>
-      </section>
+      </aside>
     </main>
 
     <!-- Scripts -->
