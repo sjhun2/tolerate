@@ -1,25 +1,25 @@
 /* ==========================================================================
    Tolerate: The Deep Drop — Styles
    File: style.css
-   Phone-first (390px base), centered up to 480px on desktop, pure CSS.
+   Phone-first (390px base), centered up to 480px on desktop.
    ========================================================================== */
 
-/* Google Fonts with swap display */
+/* Google Fonts with font-display: swap */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap');
 
 :root {
-  /* Default Meadow Palette */
-  --color-hills: #7FB88F;
-  --color-deep: #2F5D50;
-  --color-cream: #FFF8EC;
-  --color-accent: #F28C38;
+  /* Default Golden Palette (Spec Update #6) */
+  --color-hills: #8FA86B;
+  --color-deep: #3D4A2E;
+  --color-cream: #FFF6E5;
+  --color-accent: #E4572E;
   --color-mattress: #FFFFFF;
   --color-mattress-outline: #C9CED2;
-  --color-wood: #9C6638;
-  --color-wood-dark: #7A4C25;
-  --color-text-subtle: #57776D;
-  --color-border: #E8DFCE;
-  --color-card-bg: rgba(255, 255, 255, 0.65);
+  --color-wood: #8B5A2B;
+  --color-wood-dark: #5C3814;
+  --color-text-subtle: #5C6E4A;
+  --color-border: #E3D9C3;
+  --color-card-bg: rgba(255, 255, 255, 0.72);
 
   --font-heading: 'Fredoka', system-ui, -apple-system, sans-serif;
   --font-body: 'Nunito', system-ui, -apple-system, sans-serif;
@@ -90,18 +90,18 @@ body {
 
 .brand-dot {
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background-color: var(--color-accent);
 }
 
-/* Milestone 1 Sky Switcher Bar */
+/* Sky Switcher Bar */
 .sky-switcher-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: rgba(47, 93, 80, 0.08);
+  background-color: rgba(61, 74, 46, 0.08);
   border-radius: 12px;
   padding: 4px;
   margin-top: 8px;
@@ -112,7 +112,7 @@ body {
 .sky-tab-btn {
   flex: 1;
   min-height: 44px;
-  padding: 6px 10px;
+  padding: 6px 8px;
   font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 600;
@@ -130,13 +130,13 @@ body {
 }
 
 .sky-tab-btn:hover {
-  background-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
 .sky-tab-btn.active {
   background-color: #FFFFFF;
   color: var(--color-deep);
-  box-shadow: 0 2px 6px rgba(47, 93, 80, 0.12);
+  box-shadow: 0 2px 6px rgba(61, 74, 46, 0.15);
 }
 
 .sky-indicator {
@@ -144,11 +144,12 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .sky-indicator.day {
   background: linear-gradient(135deg, #BFE0F0, #E6F3F8);
-  border: 1px solid #99c7dc;
+  border: 1px solid #8ab8ce;
 }
 
 .sky-indicator.sunset {
@@ -191,7 +192,7 @@ body {
   aspect-ratio: 390 / 420;
   border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 4px 18px rgba(47, 93, 80, 0.09);
+  box-shadow: 0 4px 18px rgba(61, 74, 46, 0.12);
   background-color: #E6F3F8;
   touch-action: none;
   user-select: none;
@@ -224,38 +225,38 @@ body {
   100% { transform: translateX(-14px); }
 }
 
-/* Jumper Pacing Animation on Wooden Plank */
+/* Jumper Pacing Animation on Bridge over the Mattress Span */
 .jumper-pacing {
-  animation: jumperPacingAnim 4.8s ease-in-out infinite alternate;
+  animation: jumperBridgePacing 5.2s ease-in-out infinite alternate;
   transform-origin: center bottom;
 }
 
-@keyframes jumperPacingAnim {
+@keyframes jumperBridgePacing {
   0% {
-    transform: translateX(-24px);
+    transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(1);
   }
   48% {
-    transform: translateX(24px) scaleX(1);
+    transform: translateX(var(--jumper-pace-extent, 32px)) scaleX(1);
   }
   50% {
-    transform: translateX(24px) scaleX(-1);
+    transform: translateX(var(--jumper-pace-extent, 32px)) scaleX(-1);
   }
   98% {
-    transform: translateX(-24px) scaleX(-1);
+    transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(-1);
   }
   100% {
-    transform: translateX(-24px) scaleX(1);
+    transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(1);
   }
 }
 
-/* Jumper gentle breathing bounce */
+/* Jumper gentle stepping bob */
 .jumper-body-bob {
-  animation: jumperBob 0.6s ease-in-out infinite alternate;
+  animation: jumperStepBob 0.65s ease-in-out infinite alternate;
 }
 
-@keyframes jumperBob {
+@keyframes jumperStepBob {
   0% { transform: translateY(0px); }
-  100% { transform: translateY(-1.5px); }
+  100% { transform: translateY(-1.8px); }
 }
 
 /* Star twinkle */
@@ -271,13 +272,13 @@ body {
   100% { opacity: 1; }
 }
 
-/* Readout & Scale Info Panel */
+/* Readout Panel */
 .readout-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 10px;
-  padding: 8px 12px;
+  padding: 9px 14px;
   background-color: var(--color-card-bg);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -326,7 +327,7 @@ body {
 
 /* Action Section */
 .action-section {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -347,27 +348,27 @@ body {
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 12px rgba(47, 93, 80, 0.22);
+  box-shadow: 0 4px 14px rgba(61, 74, 46, 0.24);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .btn-lock:hover {
-  background-color: #24493e;
-  box-shadow: 0 6px 16px rgba(47, 93, 80, 0.28);
+  background-color: #313c24;
+  box-shadow: 0 6px 18px rgba(61, 74, 46, 0.32);
 }
 
 .btn-lock:active {
   transform: scale(0.985);
 }
 
-/* Milestone 1 Palette & Mode Helper */
+/* Palette & Mode Info */
 .milestone-info {
-  margin-top: 8px;
+  margin-top: 4px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: rgba(47, 93, 80, 0.05);
+  background: rgba(61, 74, 46, 0.05);
   font-size: 12px;
   color: var(--color-text-subtle);
   display: flex;
@@ -399,12 +400,14 @@ body {
   border: 1px solid var(--color-border);
   background: #FFF;
   border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 4px 10px;
+  min-height: 32px;
+  font-size: 12px;
   font-family: var(--font-heading);
   font-weight: 600;
   cursor: pointer;
   color: var(--color-deep);
+  transition: all 0.15s ease;
 }
 
 .palette-btn.active {
@@ -413,7 +416,7 @@ body {
   border-color: var(--color-deep);
 }
 
-/* Reduced Motion Support (Section 6, 7) */
+/* Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
   .cloud-drift-1,
   .cloud-drift-2,
