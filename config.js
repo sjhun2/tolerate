@@ -21,7 +21,7 @@ const CONFIG = {
   SHIFT_STEP_SIZE: 100, // Shift + Arrow key step (100 ft)
   MIN_WIDTH_RATIO: 1 / 50, // Minimum width = scale / 50 (40 ft for 0..2000)
 
-  // Color palettes specified in spec section 6
+  // Color palettes specified in spec section 6 & 17
   PALETTES: {
     golden: {
       id: 'golden',
@@ -125,15 +125,37 @@ const CONFIG = {
     },
   },
 
-  // Default Daily Question
+  // Milestone 3 Question Structure (Item 7)
+  QUESTION: {
+    text: 'How tall is the Eiffel Tower, in feet?',
+    unit: 'ft',
+    trueAnswer: 1083,
+    scaleMin: 0,
+    scaleMax: 2000,
+    scaleType: 'linear',
+    slot: 1,
+    // Aliases for compatibility
+    scale_min: 0,
+    scale_max: 2000,
+    true_answer: 1083,
+    scale_type: 'linear',
+  },
+
+  // Default Daily Question alias
   DEFAULT_QUESTION: {
     id: 'eiffel_tower_height',
     date: '2026-10-15',
     text: 'How tall is the Eiffel Tower, in feet?',
     unit: 'ft',
+    trueAnswer: 1083,
+    scaleMin: 0,
+    scaleMax: 2000,
+    scaleType: 'linear',
+    slot: 1,
     scale_min: 0,
     scale_max: 2000,
     true_answer: 1083,
+    scale_type: 'linear',
   },
 
   // Canyon & scene geometry
@@ -150,16 +172,16 @@ const CONFIG = {
     BRIDGE_LEFT: 56,
     BRIDGE_RIGHT: 334,
 
-    // Mattress vertical placement: 60% down canyon
-    MATTRESS_Y: 304,
-    MATTRESS_HEIGHT: 28,
-    STRAP_WIDTH: 3.5, // Thin strap centered on edge
+    // Mattress vertical placement: 25% less tall (21px vs 28px)
+    // Sits at Y=298 so bottom is at Y=319.
+    // Visible canyon is 146 to 420 (height = 274).
+    // Height below mattress is 101px = 36.9% (> 20% required for abyss darkness to show).
+    MATTRESS_Y: 298,
+    MATTRESS_HEIGHT: 21,
+    STRAP_WIDTH: 3.5, // Thin strap centered on edge (3 to 4px)
   },
 
-  // Responsive layout configuration for canyon proportions:
-  // Canyon width is about 6 jumper-heights.
-  // Phones: ~92% window width.
-  // Tablets & Computers: ~50% window width, never more than 1,000px wide.
+  // Responsive layout configuration for canyon proportions
   RESPONSIVE: {
     PHONE_CANYON_RATIO: 0.92,             // 92% of window width on portrait phones
     TABLET_DESKTOP_CANYON_RATIO: 0.50,    // 50% of window width on tablets & computers
