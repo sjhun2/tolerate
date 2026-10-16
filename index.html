@@ -19,22 +19,35 @@
     <main class="game-viewport">
       <!-- Top-Left Floating Test Panel: Small & anchored at the very top-left corner -->
       <aside class="corner-test-panel" aria-label="Developer Preview Controls">
-        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies and Palettes">
+        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies, Palettes and Test Answer">
           <span>⚙️ Theme</span>
         </button>
 
         <div id="corner-popup-content" class="corner-popup-content hidden">
           <div>
+            <div class="test-section-title">Test True Answer:</div>
+            <div class="test-input-row">
+              <input id="test-true-answer-input" type="number" class="test-num-input" placeholder="Custom answer" />
+              <button id="btn-set-custom-answer" type="button" class="test-pill-btn">Set</button>
+            </div>
+            <div class="test-btn-group" style="margin-top: 5px;">
+              <button id="btn-test-hit" type="button" class="test-pill-btn" title="Set answer inside current range">Force Hit</button>
+              <button id="btn-test-miss" type="button" class="test-pill-btn" title="Set answer outside current range">Force Miss</button>
+              <button id="btn-replay" type="button" class="test-pill-btn" title="Replay current question">Replay</button>
+            </div>
+          </div>
+
+          <div>
             <div class="test-section-title">Sky Slots:</div>
             <div class="test-btn-group">
               <button type="button" class="test-pill-btn sky-pill-btn active" data-slot="1">
-                <span class="sky-dot day"></span> Day
+                <span class="sky-dot day"></span> Day (Slot 1)
               </button>
               <button type="button" class="test-pill-btn sky-pill-btn" data-slot="2">
-                <span class="sky-dot sunset"></span> Sunset
+                <span class="sky-dot sunset"></span> Sunset (Slot 2)
               </button>
               <button type="button" class="test-pill-btn sky-pill-btn" data-slot="3">
-                <span class="sky-dot night"></span> Night
+                <span class="sky-dot night"></span> Night (Slot 3)
               </button>
             </div>
           </div>
@@ -72,24 +85,52 @@
         <!-- SVG rendered dynamically by game.js -->
       </div>
 
-      <!-- Bottom Card: Range Readout, Multiplier, and Lock Button -->
+      <!-- Bottom Card: Controls, Range Selection, and Result -->
       <section class="floating-card-bottom" aria-label="Controls and Range Selection">
-        <div class="readout-panel">
-          <div class="range-display">
-            <div class="range-label-row">
-              <span class="range-label">Chosen Range</span>
+        <!-- Calibrating View -->
+        <div id="card-calibrating-view" class="card-view">
+          <div class="readout-panel">
+            <div class="range-display">
+              <div class="range-label-row">
+                <span class="range-label">Chosen Range</span>
+              </div>
+              <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
             </div>
-            <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
+            <div class="multiplier-tag">
+              <span class="multiplier-label">Multiplier</span>
+              <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
+            </div>
           </div>
-          <div class="multiplier-tag">
-            <span class="multiplier-label">Multiplier</span>
-            <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
-          </div>
+
+          <button id="btn-lock-in" type="button" class="btn-lock" aria-label="Lock in your chosen range">
+            Lock it in
+          </button>
         </div>
 
-        <button id="btn-lock-in" type="button" class="btn-lock" aria-label="Lock in your chosen range">
-          Lock it in
-        </button>
+        <!-- Result View (Revealed after drop) -->
+        <div id="card-result-view" class="card-view hidden" aria-live="polite">
+          <div class="result-header-row">
+            <span id="result-status-badge" class="result-badge hit">HIT</span>
+            <span id="result-points-display" class="result-points-value">+250 pts</span>
+          </div>
+          <div class="result-details-row">
+            <div class="result-detail-item">
+              <span class="result-detail-label">True Answer</span>
+              <span id="result-answer-display" class="result-detail-val">1,083 ft</span>
+            </div>
+            <div class="result-detail-item">
+              <span class="result-detail-label">Your Range</span>
+              <span id="result-range-display" class="result-detail-val">600 – 1,400 ft</span>
+            </div>
+            <div class="result-detail-item">
+              <span class="result-detail-label">Multiplier</span>
+              <span id="result-multiplier-display" class="result-detail-val">2.5x</span>
+            </div>
+          </div>
+          <button id="btn-next-question" type="button" class="btn-lock btn-next" aria-label="Proceed to next question">
+            Next question
+          </button>
+        </div>
       </section>
     </main>
 
