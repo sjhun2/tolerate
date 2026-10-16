@@ -253,7 +253,6 @@ html, body {
     display: block;
     width: 100%;
     max-width: 390px;
-    /* Scale down proportionally if vertical space is limited */
     max-height: calc(100dvh - 185px);
     height: auto;
     aspect-ratio: 390 / 420;
@@ -265,7 +264,6 @@ html, body {
   /* Compact Bottom Card in mobile vertical flow */
   .floating-card-bottom {
     position: relative;
-    /* Leave room on the left for the floating test button */
     width: calc(100% - 56px);
     margin-left: auto;
     margin-right: 0;
@@ -388,12 +386,50 @@ html, body {
   flex-direction: column;
 }
 
+.range-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .range-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-subtle);
+}
+
+.emotion-tag {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(61, 74, 46, 0.08);
+  color: var(--color-deep);
+}
+
+.emotion-tag.chill {
+  background: rgba(143, 168, 107, 0.25);
+  color: var(--color-deep);
+}
+
+.emotion-tag.nervous {
+  background: rgba(228, 87, 46, 0.16);
+  color: #B53E17;
+}
+
+.emotion-tag.panic {
+  background: rgba(228, 87, 46, 0.3);
+  color: #9E2602;
+  animation: pulsePanic 1s infinite alternate;
+}
+
+@keyframes pulsePanic {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.05); }
 }
 
 .range-value {
@@ -547,6 +583,93 @@ html, body {
 .sky-dot.sunset { background: #F8B36A; }
 .sky-dot.night { background: #3B4A7A; }
 
+/* ==========================================================================
+   MILESTONE 2: DRAGGABLE HANDLES & JUMPER EMOTIONS
+   ========================================================================== */
+
+/* Draggable Strap Handles */
+.handle-group {
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.handle-group.dragging {
+  cursor: grabbing;
+}
+
+/* Focus halo on handles for keyboard accessibility */
+.handle-focus-ring {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.handle-group:focus-visible .handle-focus-ring {
+  opacity: 1;
+}
+
+/* Jumper Emotion Animations */
+/* 1. CHILL (r > 0.40): Slow relaxed walk */
+.emotion-chill .jumper-pacing {
+  animation: jumperBridgePacing 5.4s ease-in-out infinite alternate;
+}
+.emotion-chill .jumper-body-bob {
+  animation: jumperStepBob 0.75s ease-in-out infinite alternate;
+}
+
+/* 2. NERVOUS (0.15 < r <= 0.40): Faster walk */
+.emotion-nervous .jumper-pacing {
+  animation: jumperBridgePacing 2.6s ease-in-out infinite alternate;
+}
+.emotion-nervous .jumper-body-bob {
+  animation: jumperStepBob 0.45s ease-in-out infinite alternate;
+}
+
+/* 3. PANIC (r <= 0.15): Very fast walk + trembling */
+.emotion-panic .jumper-pacing {
+  animation: jumperBridgePacing 1.3s ease-in-out infinite alternate;
+}
+.emotion-panic .jumper-body-bob {
+  animation: jumperStepBob 0.28s ease-in-out infinite alternate;
+}
+.emotion-panic .jumper-tremble-group {
+  animation: jumperPanicTremble 0.08s infinite alternate ease-in-out;
+}
+
+@keyframes jumperPanicTremble {
+  0% { transform: translate(-0.8px, 0.4px); }
+  100% { transform: translate(0.8px, -0.4px); }
+}
+
+/* Floating Milestone 2 Toast Notice */
+.toast-notice {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 12px) + 72px);
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: rgba(45, 38, 20, 0.92);
+  color: #FFF6E5;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 100;
+  text-align: center;
+  max-width: 90vw;
+}
+
+.toast-notice.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* SVG Scene Animations */
 .cloud-drift-1 {
   animation: cloudFloat1 32s ease-in-out infinite alternate;
@@ -565,12 +688,6 @@ html, body {
   100% { transform: translateX(-14px); }
 }
 
-/* Jumper Pacing Animation on Bridge */
-.jumper-pacing {
-  animation: jumperBridgePacing 5.2s ease-in-out infinite alternate;
-  transform-origin: center bottom;
-}
-
 @keyframes jumperBridgePacing {
   0% {
     transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(1);
@@ -587,10 +704,6 @@ html, body {
   100% {
     transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(1);
   }
-}
-
-.jumper-body-bob {
-  animation: jumperStepBob 0.65s ease-in-out infinite alternate;
 }
 
 @keyframes jumperStepBob {
@@ -617,6 +730,7 @@ html, body {
   .cloud-drift-2,
   .jumper-pacing,
   .jumper-body-bob,
+  .jumper-tremble-group,
   .star-twinkle-1,
   .star-twinkle-2 {
     animation: none !important;
