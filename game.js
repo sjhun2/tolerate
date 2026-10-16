@@ -2,27 +2,20 @@
  * Tolerate: The Deep Drop — Game Engine
  * File: game.js
  * Plain JavaScript (no build tools, no frameworks).
+ * Milestone 3: Reveal animation, test data, hit/miss sequences, and result card.
  */
 
 (function () {
   'use strict';
 
-  // Game state: mode can be 'calibrating', 'locked', 'revealing', or 'result' (Item 7)
+  // Game state (Item 7 from M2 + M3 reveal state)
   const state = {
     mode: 'calibrating', // 'calibrating' | 'locked' | 'revealing' | 'result'
     currentSlot: 1,      // 1: Day, 2: Sunset, 3: Night
     currentPalette: (typeof CONFIG !== 'undefined' && CONFIG.DEFAULT_PALETTE) || 'golden',
-    question: (typeof CONFIG !== 'undefined' && (CONFIG.QUESTION || CONFIG.DEFAULT_QUESTION)) || {
-      text: 'How tall is the Eiffel Tower, in feet?',
-      unit: 'ft',
-      trueAnswer: 1083,
-      scaleMin: 0,
-      scaleMax: 2000,
-      scaleType: 'linear',
-      slot: 1,
-    },
+    question: null,      // Loaded dynamically from CONFIG.TEST_QUESTIONS
 
-    // Range in feet (0 to 2,000 ft, rounded to nearest 10)
+    // Range in scale units (rounded to step)
     currentLo: 600,
     currentHi: 1400,
 
@@ -32,6 +25,26 @@
     dragStartLo: 600,
     dragStartHi: 1400,
     toastTimeout: null,
+
+    // Milestone 3 Reveal Animation State
+    revealData: {
+      jumperX: 0,
+      jumperY: 146,
+      jumperFacing: 1,      // 1 = right, -1 = left
+      jumperOpacity: 1,
+      jumperScaleRatio: 1,
+      emotion: 'chill',     // 'chill', 'nervous', 'panic', 'relieved', 'screaming'
+      isWalking: false,
+      showMarker: false,
+      markerX: 0,
+      markerValue: 0,
+      speechBubble: null,   // null | { text: 'Whew!', type: 'hit' } | { text: 'AAHHHH!', type: 'miss' }
+      mattressSquashing: false,
+      mattressShake: false,
+      scoreResult: null,
+    },
+
+    animationTimers: [],
   };
 
   /**
@@ -52,7 +65,7 @@
   }
 
   /**
-   * Helper function 1 (Item 7):
+   * Helper function 1:
    * Converts a numeric value to an X position on the canyon SVG coordinates.
    */
   function numberToCanyonX(val, layout) {
@@ -71,7 +84,7 @@
   }
 
   /**
-   * Helper function 2 (Item 7):
+   * Helper function 2:
    * Converts an X position on the canyon back to a numeric value.
    */
   function canyonXToNumber(x, layout) {
@@ -92,9 +105,8 @@
   }
 
   /**
-   * Helper function 3 (Item 7):
+   * Helper function 3:
    * Computes score: { hit, multiplier, points } using multiplier formula and BASE_POINTS = 100.
-   * Not called or displayed yet (reserved for Milestone 3).
    */
   function computeScore(lo, hi, trueAnswer) {
     const q = state.question;
@@ -129,17 +141,16 @@
   }
 
   /**
-   * Calculate current range, multiplier, and jumper emotion
+   * Calculate current range, multiplier, and jumper emotion for calibrating mode
    */
   function calculateRangeValues() {
     const q = state.question;
     const { min, max, total } = getQuestionScale(q);
-    const lo = Math.round(state.currentLo / 10) * 10;
-    const hi = Math.round(state.currentHi / 10) * 10;
-    const width = Math.max(10, hi - lo);
+    const step = q.scaleMax > 10000 ? 100 : 10;
+    const lo = Math.round(state.currentLo / step) * step;
+    const hi = Math.round(state.currentHi / step) * step;
+    const width = Math.max(step, hi - lo);
 
-    // Multiplier Formula: (scale / range_width) ** MULTIPLIER_EXPONENT (0.6)
-    // Capped at (MAX_SCALE_RATIO ** MULTIPLIER_EXPONENT) ≈ 10.456
     const exponent = typeof CONFIG.MULTIPLIER_EXPONENT === 'number' ? CONFIG.MULTIPLIER_EXPONENT : 0.6;
     const maxRatio = typeof CONFIG.MAX_SCALE_RATIO === 'number' ? CONFIG.MAX_SCALE_RATIO : 50;
     const maxMultiplier = Math.pow(maxRatio, exponent);
@@ -147,13 +158,8 @@
     const multiplier = Math.min(rawMultiplier, maxMultiplier);
     const multiplierStr = multiplier.toFixed(1);
 
-    // Emotion ratio: r = width / scale
-    // r > 0.40: CHILL
-    // 0.15 < r <= 0.40: NERVOUS
-    // r <= 0.15: PANIC
     const r = width / total;
     let emotion = 'chill';
-
     if (r > 0.40) {
       emotion = 'chill';
     } else if (r > 0.15) {
@@ -174,10 +180,6 @@
 
   /**
    * Compute dynamic scene layout based on viewport width, height, and orientation.
-   * Proportions:
-   * - Canyon width is about 6 jumper-heights.
-   * - Phones in portrait: canyon spans about 92% of window width.
-   * - Tablets & computers: canyon spans about 50% of window width, capped at 1,000px.
    */
   function computeSceneLayout() {
     const winW = window.innerWidth || document.documentElement.clientWidth || 390;
@@ -185,12 +187,10 @@
     const isPortrait = winH > winW;
     const isPhone = winW <= 600 || (winW <= 700 && isPortrait);
 
-    // Reserved vertical space for top and bottom floating cards so cards never cover scene
     const reservedTop = isPhone ? 80 : 90;
-    const reservedBottom = isPhone ? 98 : 110;
+    const reservedBottom = isPhone ? 104 : 116;
     const availSceneH = Math.max(300, winH - reservedTop - reservedBottom);
 
-    // Canyon width in pixels on screen
     let canyonWidthPx;
     if (isPhone) {
       canyonWidthPx = winW * 0.92;
@@ -201,7 +201,6 @@
       canyonWidthPx = Math.min(canyonWidthPx, maxCanyonPxForHeight);
     }
 
-    // Canyon width is about 6 jumper-heights. Jumper is 60px to 165px tall.
     let targetJumperHeightPx = canyonWidthPx / 6;
     targetJumperHeightPx = Math.max(60, Math.min(165, targetJumperHeightPx));
 
@@ -274,7 +273,6 @@
     root.style.setProperty('--color-wood', pal.woodPlank);
     root.style.setProperty('--color-wood-dark', pal.woodPlankDark);
 
-    // Update active state in test buttons
     document.querySelectorAll('.palette-pill-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.palette === paletteKey);
     });
@@ -283,9 +281,10 @@
   }
 
   /**
-   * Set active sky slot (1 = Day, 2 = Sunset, 3 = Night)
+   * Set active sky slot and question (1 = Day, 2 = Sunset, 3 = Night)
+   * The question text, scale labels, and sky change with the slot (Milestone 3 Test Data).
    */
-  function setSlot(slotNumber) {
+  function setSlot(slotNumber, resetRange = true) {
     state.currentSlot = Number(slotNumber);
     const slotInfo = CONFIG.SLOTS[state.currentSlot] || CONFIG.SLOTS[1];
     const root = document.documentElement;
@@ -295,11 +294,45 @@
     root.style.setProperty('--tint-color', slotInfo.tintColor);
     root.style.setProperty('--tint-opacity', slotInfo.tintOpacity.toString());
 
+    // Load matching test question from CONFIG.TEST_QUESTIONS
+    const testQ = (CONFIG.TEST_QUESTIONS && CONFIG.TEST_QUESTIONS[state.currentSlot]) || CONFIG.QUESTION;
+    state.question = { ...testQ };
+
+    // Update Question Card UI
     const slotNumEl = document.getElementById('current-slot-num');
-    if (slotNumEl) {
-      slotNumEl.textContent = state.currentSlot;
+    if (slotNumEl) slotNumEl.textContent = state.currentSlot;
+
+    const qTextEl = document.getElementById('question-text-display');
+    if (qTextEl) qTextEl.textContent = state.question.text;
+
+    // Update Test Panel input value
+    const testInput = document.getElementById('test-true-answer-input');
+    if (testInput) testInput.value = state.question.trueAnswer;
+
+    // Reset range to middle 40% of scale if requested
+    if (resetRange) {
+      const { min, max, total } = getQuestionScale(state.question);
+      const step = total > 10000 ? 100 : 10;
+      state.currentLo = Math.round((min + total * 0.30) / step) * step;
+      state.currentHi = Math.round((min + total * 0.70) / step) * step;
     }
 
+    // Reset animation state
+    clearAllAnimationTimers();
+    state.mode = 'calibrating';
+    state.revealData.showMarker = false;
+    state.revealData.speechBubble = null;
+    state.revealData.mattressSquashing = false;
+    state.revealData.mattressShake = false;
+    state.revealData.jumperFacing = 1;
+    state.revealData.jumperOpacity = 1;
+    state.revealData.jumperScaleRatio = 1;
+    state.revealData.isWalking = false;
+
+    // Switch card view back to calibrating
+    showCardView('calibrating');
+
+    // Update sky tab active states
     document.querySelectorAll('.sky-pill-btn').forEach(btn => {
       btn.classList.toggle('active', Number(btn.dataset.slot) === state.currentSlot);
     });
@@ -308,13 +341,47 @@
   }
 
   /**
+   * Switch between calibrating and result card views (Item 6)
+   */
+  function showCardView(viewName) {
+    const calView = document.getElementById('card-calibrating-view');
+    const resView = document.getElementById('card-result-view');
+    const btnLock = document.getElementById('btn-lock-in');
+
+    if (viewName === 'result') {
+      if (calView) calView.classList.add('hidden');
+      if (resView) resView.classList.remove('hidden');
+    } else {
+      if (calView) calView.classList.remove('hidden');
+      if (resView) resView.classList.add('hidden');
+      if (btnLock) btnLock.disabled = false;
+    }
+  }
+
+  /**
+   * Clear any running animation timeouts
+   */
+  function clearAllAnimationTimers() {
+    state.animationTimers.forEach(t => clearTimeout(t));
+    state.animationTimers = [];
+  }
+
+  function addTimer(fn, delay) {
+    const t = setTimeout(fn, delay);
+    state.animationTimers.push(t);
+    return t;
+  }
+
+  /**
    * Update range by feet with constraint enforcement
    */
   function setHandleValue(handle, targetValue) {
-    const { min, max, total } = getQuestionScale(state.question);
-    const minWidth = Math.round(total * CONFIG.MIN_WIDTH_RATIO); // 40 ft
+    if (state.mode !== 'calibrating') return; // Cannot drag when locked
 
-    const rounded = Math.round(targetValue / 10) * 10;
+    const { min, max, total } = getQuestionScale(state.question);
+    const minWidth = Math.round(total * CONFIG.MIN_WIDTH_RATIO);
+    const step = total > 10000 ? 100 : 10;
+    const rounded = Math.round(targetValue / step) * step;
 
     if (handle === 'left') {
       const maxAllowed = state.currentHi - minWidth;
@@ -328,25 +395,25 @@
   }
 
   /**
-   * Handle dragging movement from pointer coordinates using helper function canyonXToNumber (Item 7).
+   * Handle dragging movement from pointer coordinates
    */
   function updateFromPointer(clientX) {
-    if (!state.activeDragHandle) return;
+    if (state.mode !== 'calibrating' || !state.activeDragHandle) return;
 
     const layout = computeSceneLayout();
     const svgCoords = screenToSvgCoords(clientX, 0);
     const { min, max, total } = getQuestionScale(state.question);
+    const step = total > 10000 ? 100 : 10;
 
     if (state.activeDragHandle === 'left' || state.activeDragHandle === 'right') {
-      // Use helper function canyonXToNumber everywhere (Item 7)
       const targetValue = canyonXToNumber(svgCoords.x, layout);
       setHandleValue(state.activeDragHandle, targetValue);
     } else if (state.activeDragHandle === 'mattress') {
       const deltaSvgX = svgCoords.x - state.dragStartSvgX;
-      const feetDelta = (deltaSvgX / layout.canyonWidth) * total;
+      const unitsDelta = (deltaSvgX / layout.canyonWidth) * total;
       const span = state.dragStartHi - state.dragStartLo;
 
-      let targetLo = Math.round((state.dragStartLo + feetDelta) / 10) * 10;
+      let targetLo = Math.round((state.dragStartLo + unitsDelta) / step) * step;
       let targetHi = targetLo + span;
 
       if (targetLo < min) {
@@ -403,26 +470,309 @@
 
     state.toastTimeout = setTimeout(() => {
       toast.classList.remove('show');
-    }, 3200);
+    }, 2800);
+  }
+
+  /**
+   * =========================================================================
+   * MILESTONE 3: THE REVEAL SEQUENCE
+   * =========================================================================
+   * 1. Lock: Button disabled, straps cannot be dragged, quick shake.
+   * 2. Jumper stops pacing and WALKS briskly along bridge to true answer position. Marker appears.
+   * 3. 1.0s suspense pause with nervous face, steps off edge, falls accelerating (~1.2s).
+   * 4. HIT: mattress squashes ~15%, bounces, settles, relieved face, speech bubble "Whew!",
+   *    points count up from 0.
+   * 5. MISS: falls past mattress, screaming face, wobbling "AAHHHH!", shrinks and fades into dark abyss,
+   *    shows "BUST · 0 pts" (no death text).
+   * 6. Result card replaces bottom card.
+   */
+  function startRevealSequence() {
+    if (state.mode !== 'calibrating') return;
+
+    clearAllAnimationTimers();
+    state.mode = 'locked';
+
+    // 1. Lock: Button disabled, straps cannot be dragged
+    const btnLock = document.getElementById('btn-lock-in');
+    if (btnLock) btnLock.disabled = true;
+
+    // Quick little shake on mattress assembly (0.3s)
+    state.revealData.mattressShake = true;
+    renderScene();
+
+    addTimer(() => {
+      state.revealData.mattressShake = false;
+      renderScene();
+    }, 320);
+
+    const layout = computeSceneLayout();
+    const rangeData = calculateRangeValues();
+    const trueAns = state.question.trueAnswer;
+    const score = computeScore(state.currentLo, state.currentHi, trueAns);
+    state.revealData.scoreResult = score;
+
+    const startX = (numberToCanyonX(state.currentLo, layout) + numberToCanyonX(state.currentHi, layout)) / 2;
+    const targetX = numberToCanyonX(trueAns, layout);
+
+    // Respect prefers-reduced-motion
+    const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      state.mode = 'result';
+      state.revealData.jumperX = targetX;
+      state.revealData.showMarker = true;
+      state.revealData.markerX = targetX;
+      state.revealData.markerValue = trueAns;
+
+      if (score.hit) {
+        state.revealData.jumperY = CONFIG.CANVAS.MATTRESS_Y - 14;
+        state.revealData.emotion = 'relieved';
+        state.revealData.speechBubble = { text: 'Whew!', type: 'hit' };
+      } else {
+        state.revealData.jumperY = 440;
+        state.revealData.jumperOpacity = 0;
+        state.revealData.emotion = 'screaming';
+        state.revealData.speechBubble = { text: 'BUST · 0 pts', type: 'miss' };
+      }
+
+      renderScene();
+      populateResultCard(score, rangeData);
+      showCardView('result');
+      return;
+    }
+
+    // 2. Walking Phase: Jumper stops pacing and WALKS briskly along bridge
+    state.mode = 'revealing';
+    state.revealData.jumperX = startX;
+    state.revealData.jumperY = CONFIG.CANVAS.BRIDGE_Y;
+    state.revealData.emotion = 'nervous';
+    state.revealData.isWalking = true;
+    state.revealData.jumperFacing = targetX < startX ? -1 : 1;
+    renderScene();
+
+    const walkDist = Math.abs(targetX - startX);
+    const walkDuration = Math.max(0.6, Math.min(1.2, walkDist / 140)); // brisk pace
+    const walkStartTime = performance.now();
+
+    function stepWalk(now) {
+      if (state.mode !== 'revealing') return;
+      const elapsed = (now - walkStartTime) / 1000;
+      const progress = Math.min(1, elapsed / walkDuration);
+
+      const currentX = startX + (targetX - startX) * progress;
+      state.revealData.jumperX = currentX;
+
+      const jumperGroup = document.getElementById('jumper-container');
+      if (jumperGroup) {
+        jumperGroup.setAttribute('transform', `translate(${currentX}, ${CONFIG.CANVAS.BRIDGE_Y})`);
+      }
+
+      if (progress < 1) {
+        requestAnimationFrame(stepWalk);
+      } else {
+        // Arrived at true answer on bridge!
+        state.revealData.jumperX = targetX;
+        state.revealData.isWalking = false;
+        state.revealData.showMarker = true;
+        state.revealData.markerX = targetX;
+        state.revealData.markerValue = trueAns;
+        state.revealData.emotion = 'nervous';
+        renderScene();
+
+        // 3. Pause about 1.0 second for suspense, with nervous expression
+        addTimer(() => {
+          startFall(targetX, score, rangeData);
+        }, 1000);
+      }
+    }
+
+    requestAnimationFrame(stepWalk);
+  }
+
+  /**
+   * Jumper steps off the bridge edge and falls straight down, accelerating for ~1.2s.
+   */
+  function startFall(fallX, score, rangeData) {
+    if (state.mode !== 'revealing') return;
+
+    const bridgeY = CONFIG.CANVAS.BRIDGE_Y; // 146
+    const mattressY = CONFIG.CANVAS.MATTRESS_Y; // 298
+    const fallDuration = 1.2; // ~1.2s accelerating drop
+    const fallStartTime = performance.now();
+
+    // Target Y: If hit, lands on mattress top (mattressY - 14 = 284).
+    // If miss, plunges straight down past mattress into abyss (y = 480).
+    const targetY = score.hit ? (mattressY - 14) : 480;
+
+    state.revealData.emotion = score.hit ? 'panic' : 'screaming';
+    if (!score.hit) {
+      // Wobbling "AAHHHH!" speech bubble beside him during plunge
+      state.revealData.speechBubble = { text: 'AAHHHH!', type: 'miss' };
+    }
+    renderScene();
+
+    function stepFall(now) {
+      if (state.mode !== 'revealing') return;
+      const elapsed = (now - fallStartTime) / 1000;
+      const rawProgress = Math.min(1, elapsed / fallDuration);
+
+      // Accelerating fall: quadratic ease-in
+      const progress = rawProgress * rawProgress;
+      const currentY = bridgeY + (targetY - bridgeY) * progress;
+
+      state.revealData.jumperY = currentY;
+
+      // In miss, he shrinks slightly and fades out into darkness near bottom
+      if (!score.hit) {
+        if (progress > 0.4) {
+          const fadeProgress = (progress - 0.4) / 0.6;
+          state.revealData.jumperOpacity = Math.max(0, 1 - fadeProgress);
+          state.revealData.jumperScaleRatio = Math.max(0.68, 1 - fadeProgress * 0.32);
+        }
+      }
+
+      const jumperGroup = document.getElementById('jumper-container');
+      if (jumperGroup) {
+        const scaleVal = (computeSceneLayout().jumperScale * state.revealData.jumperScaleRatio).toFixed(2);
+        jumperGroup.setAttribute('transform', `translate(${fallX}, ${currentY})`);
+        jumperGroup.style.opacity = state.revealData.jumperOpacity;
+        const innerScaler = jumperGroup.querySelector('.jumper-scaler');
+        if (innerScaler) {
+          innerScaler.setAttribute('transform', `scale(${scaleVal})`);
+        }
+      }
+
+      if (rawProgress < 1) {
+        requestAnimationFrame(stepFall);
+      } else {
+        if (score.hit) {
+          onHitLanded(fallX, score, rangeData);
+        } else {
+          onMissFinished(score, rangeData);
+        }
+      }
+    }
+
+    requestAnimationFrame(stepFall);
+  }
+
+  /**
+   * 4. HIT Sequence: Mattress squashes ~15%, jumper bounces once/twice, settles with relieved face,
+   * speech bubble says "Whew!", and points count up from 0.
+   */
+  function onHitLanded(fallX, score, rangeData) {
+    state.revealData.mattressSquashing = true;
+    state.revealData.emotion = 'relieved';
+    state.revealData.speechBubble = { text: 'Whew!', type: 'hit' };
+    renderScene();
+
+    // Rebound bounce 1
+    addTimer(() => {
+      state.revealData.jumperY = CONFIG.CANVAS.MATTRESS_Y - 26;
+      renderScene();
+    }, 180);
+
+    // Settle on mattress
+    addTimer(() => {
+      state.revealData.mattressSquashing = false;
+      state.revealData.jumperY = CONFIG.CANVAS.MATTRESS_Y - 14;
+      renderScene();
+    }, 380);
+
+    // Points count up from 0 to score.points
+    addTimer(() => {
+      state.mode = 'result';
+      populateResultCard(score, rangeData);
+      showCardView('result');
+      animatePointsCountUp(score.points);
+    }, 700);
+  }
+
+  /**
+   * 5. MISS Sequence: Jumper has faded into darkness, show "BUST · 0 pts" (no death text).
+   */
+  function onMissFinished(score, rangeData) {
+    state.revealData.speechBubble = { text: 'BUST · 0 pts', type: 'miss' };
+    renderScene();
+
+    addTimer(() => {
+      state.mode = 'result';
+      populateResultCard(score, rangeData);
+      showCardView('result');
+    }, 750);
+  }
+
+  /**
+   * Populate Result Card with details (Item 6)
+   */
+  function populateResultCard(score, rangeData) {
+    const badge = document.getElementById('result-status-badge');
+    const pointsEl = document.getElementById('result-points-display');
+    const ansEl = document.getElementById('result-answer-display');
+    const rangeEl = document.getElementById('result-range-display');
+    const multEl = document.getElementById('result-multiplier-display');
+
+    if (badge) {
+      badge.textContent = score.hit ? 'HIT' : 'BUST';
+      badge.className = `result-badge ${score.hit ? 'hit' : 'bust'}`;
+    }
+
+    if (pointsEl) {
+      pointsEl.textContent = score.hit ? `+${formatNum(score.points)} pts` : '0 pts';
+      pointsEl.className = `result-points-value ${score.hit ? 'hit' : 'bust'}`;
+    }
+
+    if (ansEl) {
+      ansEl.textContent = `${formatNum(state.question.trueAnswer)} ${state.question.unit}`;
+    }
+
+    if (rangeEl) {
+      rangeEl.textContent = `${formatNum(rangeData.lo)} – ${formatNum(rangeData.hi)} ${state.question.unit}`;
+    }
+
+    if (multEl) {
+      multEl.textContent = `${rangeData.multiplier}x`;
+    }
+  }
+
+  /**
+   * Animate points counting up from 0 to target points (Item 4)
+   */
+  function animatePointsCountUp(targetPoints) {
+    const pointsEl = document.getElementById('result-points-display');
+    if (!pointsEl || targetPoints <= 0) return;
+
+    const duration = 800; // ms
+    const startTime = performance.now();
+
+    function stepCount(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const current = Math.round(targetPoints * progress);
+      pointsEl.textContent = `+${formatNum(current)} pts`;
+
+      if (progress < 1) {
+        requestAnimationFrame(stepCount);
+      } else {
+        pointsEl.textContent = `+${formatNum(targetPoints)} pts`;
+      }
+    }
+
+    requestAnimationFrame(stepCount);
+  }
+
+  /**
+   * Advance to Next Question (Item 7):
+   * Moves to next slot (1 -> 2 -> 3 -> 1), resets straps to middle 40% of scale,
+   * updates sky and question text.
+   */
+  function advanceToNextQuestion() {
+    const nextSlot = (state.currentSlot % 3) + 1;
+    setSlot(nextSlot, true);
+    showToast(`Question ${nextSlot} of 3`);
   }
 
   /**
    * Render the complete responsive SVG scene.
-   * CLEANUP Pass for Milestone 2:
-   * 1. Mood text deleted from UI (shows only through jumper).
-   * 2. Abyss canyon:
-   *    - ALL wavy lines and streaks deleted.
-   *    - Vertical gradient 0% #8AA39A, 30% #5E7A71, 50% #33463F, 70% #121C18, 100% #050B09.
-   *    - Continues #050B09 behind bottom card to bottom edge of window.
-   *    - Lower cliff walls darkened to match.
-   *    - At least 20% visible canyon height below mattress.
-   * 3. Mattress proportions:
-   *    - 25% less tall (21px vs 28px).
-   *    - Orange straps exactly as tall as mattress + 3px at each end (no sticking out).
-   *    - Straps 3.5px thin.
-   *    - Clean quilted mattress appearance.
-   * 6. Number labels under straps have cream pill backgrounds (4.5:1 contrast).
-   * 7. Uses helper functions numberToCanyonX & canyonXToNumber everywhere.
    */
   function renderScene() {
     const container = document.getElementById('scene-svg-wrapper');
@@ -437,66 +787,47 @@
     const rangeData = calculateRangeValues();
     const { min, max } = getQuestionScale(state.question);
 
-    // Canyon dimensions in SVG user units
     const canyonLeft = layout.canyonLeft;
     const canyonRight = layout.canyonRight;
     const canyonWidth = layout.canyonWidth;
 
-    // Use helper function numberToCanyonX everywhere (Item 7)
     const rawLeft = numberToCanyonX(rangeData.lo, layout);
     const rawRight = numberToCanyonX(rangeData.hi, layout);
 
-    // Bridge coordinates
     const bridgeY = CONFIG.CANVAS.BRIDGE_Y || 146;
     const bridgeRopeTopY = bridgeY - 14;
 
-    // Mattress coordinates: 25% less tall (21px vs 28px) (Item 3)
     const mattressY = CONFIG.CANVAS.MATTRESS_Y || 298;
     const mattressHeight = CONFIG.CANVAS.MATTRESS_HEIGHT || 21;
 
-    // Mattress body between rawLeft and rawRight
     const matLeft = rawLeft;
     const matRight = rawRight;
     const matWidth = Math.max(1, matRight - matLeft);
     const matCenter = (matLeft + matRight) / 2;
 
-    // Strap width: 3.5px thin (3 to 4px) (Item 3)
     const strapWidth = CONFIG.CANVAS.STRAP_WIDTH || 3.5;
-
-    // Orange strap: exactly as tall as mattress + 3px at each end (Item 3)
     const strapTopY = mattressY - 3;
     const strapBottomY = mattressY + mattressHeight + 3;
-    const strapH = strapBottomY - strapTopY; // Exactly mattressHeight + 6
+    const strapH = strapBottomY - strapTopY;
 
-    // Straps centered exactly on the range edges
     const strapLeftCenterX = rawLeft;
     const strapRightCenterX = rawRight;
-
-    // Jumper pacing extent: spans strictly over the mattress area
     const jumperPaceExtent = Math.max(3, (matWidth / 2) - 14);
 
-    // Range extrema numbers under each strap
     const leftNumStr = formatNum(rangeData.lo);
     const rightNumStr = formatNum(rangeData.hi);
-
-    // Position of number labels directly under straps (Item 6)
     const labelY = strapBottomY + 14;
 
-    // Merge labels when straps get close together
     const strapDist = Math.abs(strapRightCenterX - strapLeftCenterX);
     const shouldMergeLabels = strapDist < 66;
     const mergedX = Math.max(canyonLeft + 36, Math.min(canyonRight - 36, matCenter));
     const numLeftX = Math.max(canyonLeft + 22, Math.min(canyonRight - 22, strapLeftCenterX));
     const numRightX = Math.max(canyonLeft + 22, Math.min(canyonRight - 22, strapRightCenterX));
 
-    // Scale endpoint labels ("0 ft" and "2,000 ft") at bridge anchors
     const leftScaleLabelX = Math.max(22, canyonLeft);
     const rightScaleLabelX = Math.min(vw - 26, canyonRight);
 
-    // SVG Defs with exact requested abyss gradient (Item 2):
-    // 0% #8AA39A, 30% #5E7A71, 50% #33463F, 70% #121C18, 100% #050B09
-    // Defined with userSpaceOnUse from y1=146 (just below bridge) to y2=420 (top of bottom card/scene base).
-    // Continues #050B09 downwards behind bottom card to bottom edge of window.
+    // SVG Defs with exact requested abyss gradient (Item 2)
     const defs = `
       <defs>
         <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -504,7 +835,6 @@
           <stop offset="100%" stop-color="${slotInfo.skyBottom}" />
         </linearGradient>
 
-        <!-- EXACT Abyss Gradient from Item 2 -->
         <linearGradient id="abyssChasmGrad" x1="0" y1="146" x2="0" y2="420" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stop-color="#8AA39A" />
           <stop offset="30%" stop-color="#5E7A71" />
@@ -513,7 +843,6 @@
           <stop offset="100%" stop-color="#050B09" />
         </linearGradient>
 
-        <!-- Left Cliff: Darkens toward bottom to seamlessly match abyss (#121C18, #050B09) -->
         <linearGradient id="leftCliffGrad" x1="0" y1="100" x2="0" y2="420" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stop-color="${pal.hills}" />
           <stop offset="25%" stop-color="${pal.hillsDark}" />
@@ -522,7 +851,6 @@
           <stop offset="100%" stop-color="#050B09" />
         </linearGradient>
 
-        <!-- Right Cliff: Darkens toward bottom to seamlessly match abyss (#121C18, #050B09) -->
         <linearGradient id="rightCliffGrad" x1="0" y1="100" x2="0" y2="420" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stop-color="${pal.hills}" />
           <stop offset="25%" stop-color="${pal.hillsDark}" />
@@ -531,7 +859,6 @@
           <stop offset="100%" stop-color="#050B09" />
         </linearGradient>
 
-        <!-- Quilted White Mattress Gradient -->
         <linearGradient id="mattressThickGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#FFFFFF" />
           <stop offset="20%" stop-color="#FFFFFF" />
@@ -539,7 +866,6 @@
           <stop offset="100%" stop-color="#DFE5E8" />
         </linearGradient>
 
-        <!-- Box Spring Base -->
         <linearGradient id="boxSpringGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#CCD3D9" />
           <stop offset="100%" stop-color="#9EA8AF" />
@@ -598,39 +924,35 @@
       `;
     }
 
-    // Extended Distant Mountain Silhouette
     const distantHills = `
       <path d="M -2000 135 Q ${vw * 0.25} 115 ${vw * 0.5} 128 Q ${vw * 0.75} 112 ${vw + 2000} 130 L ${vw + 2000} 220 L -2000 220 Z" fill="#699E79" opacity="0.35" />
     `;
 
-    // 2. Canyon Abyss (Item 2):
-    // ALL wavy lines and streaks DELETED.
-    // Vertical gradient from just below bridge (y=146) to top of bottom card (y=420),
-    // and continues #050B09 behind bottom card to bottom edge of window (y=2000).
+    // 2. Canyon Abyss: Clean vertical gradient without streaks or wavy lines
     const canyonChasm = `
       <rect x="${canyonLeft}" y="146" width="${canyonWidth}" height="1854" fill="url(#abyssChasmGrad)" />
     `;
 
-    // 3. Left and Right Cliffs (darkened at lower parts to match abyss)
+    // 3. Left and Right Cliffs (Item 9: Clean rock facets in slightly darker cliff tones, no black holes)
     const leftCliff = `
       <path d="M -2000 100 Q -800 95 ${canyonLeft - 20} 118 L ${canyonLeft} 146 L ${canyonLeft} 2000 L -2000 2000 Z" fill="url(#leftCliffGrad)" />
-      <path d="M ${canyonLeft - 20} 118 L ${canyonLeft} 146 L ${canyonLeft} 2000 L ${canyonLeft - 6} 2000 L ${canyonLeft - 6} 150 L ${canyonLeft - 22} 122 Z" fill="#121C18" opacity="0.75" />
-      <path d="M ${canyonLeft - 30} 165 L ${canyonLeft} 175 L ${canyonLeft - 2} 205 L ${canyonLeft - 24} 198 Z" fill="#33463F" opacity="0.45" />
-      <path d="M ${canyonLeft - 22} 230 L ${canyonLeft} 240 L ${canyonLeft - 2} 275 L ${canyonLeft - 26} 265 Z" fill="#121C18" opacity="0.65" />
-      <path d="M ${canyonLeft - 34} 310 L ${canyonLeft} 325 L ${canyonLeft - 4} 360 L ${canyonLeft - 30} 350 Z" fill="#050B09" opacity="0.8" />
+      <path d="M ${canyonLeft - 20} 118 L ${canyonLeft} 146 L ${canyonLeft} 2000 L ${canyonLeft - 6} 2000 L ${canyonLeft - 6} 150 L ${canyonLeft - 22} 122 Z" fill="${pal.hillsDark}" opacity="0.45" />
+      <path d="M ${canyonLeft - 30} 165 L ${canyonLeft} 175 L ${canyonLeft - 2} 205 L ${canyonLeft - 24} 198 Z" fill="${pal.hillsDark}" opacity="0.4" />
+      <path d="M ${canyonLeft - 22} 230 L ${canyonLeft} 240 L ${canyonLeft - 2} 275 L ${canyonLeft - 26} 265 Z" fill="#3D4A2E" opacity="0.5" />
+      <path d="M ${canyonLeft - 34} 310 L ${canyonLeft} 325 L ${canyonLeft - 4} 360 L ${canyonLeft - 30} 350 Z" fill="#2C3D32" opacity="0.6" />
       <path d="M -2000 100 Q -800 95 ${canyonLeft - 20} 118 L ${canyonLeft} 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
     const rightCliff = `
       <path d="M ${vw + 2000} 98 Q ${vw + 800} 95 ${canyonRight + 20} 118 L ${canyonRight} 146 L ${canyonRight} 2000 L ${vw + 2000} 2000 Z" fill="url(#rightCliffGrad)" />
-      <path d="M ${canyonRight + 20} 118 L ${canyonRight} 146 L ${canyonRight} 2000 L ${canyonRight + 6} 2000 L ${canyonRight + 6} 150 L ${canyonRight + 22} 122 Z" fill="#121C18" opacity="0.75" />
-      <path d="M ${canyonRight + 30} 165 L ${canyonRight} 175 L ${canyonRight + 2} 205 L ${canyonRight + 24} 198 Z" fill="#33463F" opacity="0.45" />
-      <path d="M ${canyonRight + 22} 230 L ${canyonRight} 240 L ${canyonRight + 2} 275 L ${canyonRight + 26} 265 Z" fill="#121C18" opacity="0.65" />
-      <path d="M ${canyonRight + 34} 310 L ${canyonRight} 325 L ${canyonRight + 4} 360 L ${canyonRight + 30} 350 Z" fill="#050B09" opacity="0.8" />
+      <path d="M ${canyonRight + 20} 118 L ${canyonRight} 146 L ${canyonRight} 2000 L ${canyonRight + 6} 2000 L ${canyonRight + 6} 150 L ${canyonRight + 22} 122 Z" fill="${pal.hillsDark}" opacity="0.45" />
+      <path d="M ${canyonRight + 30} 165 L ${canyonRight} 175 L ${canyonRight + 2} 205 L ${canyonRight + 24} 198 Z" fill="${pal.hillsDark}" opacity="0.4" />
+      <path d="M ${canyonRight + 22} 230 L ${canyonRight} 240 L ${canyonRight + 2} 275 L ${canyonRight + 26} 265 Z" fill="#3D4A2E" opacity="0.5" />
+      <path d="M ${canyonRight + 34} 310 L ${canyonRight} 325 L ${canyonRight + 4} 360 L ${canyonRight + 30} 350 Z" fill="#2C3D32" opacity="0.6" />
       <path d="M ${vw + 2000} 98 Q ${vw + 800} 95 ${canyonRight + 20} 118 L ${canyonRight} 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
-    // 4. Pine Trees dynamically positioned on cliffs
+    // 4. Pine Trees on cliffs
     const pineTrees = `
       ${drawPineTree(canyonLeft - 9, 144, 0.65, pal.deepGreen)}
       ${drawPineTree(canyonLeft - 24, 138, 0.85, pal.deepGreen)}
@@ -670,7 +992,6 @@
 
     const bridge = `
       <g id="rope-bridge-assembly">
-        <!-- Left Bridge Anchor Post -->
         <g id="bridge-anchor-left">
           <rect x="${leftAnchorX - 2}" y="${bridgeRopeTopY - 8}" width="9" height="34" rx="2" fill="#5A3716" stroke="#36200A" stroke-width="1.2" />
           <rect x="${leftAnchorX}" y="${bridgeRopeTopY - 6}" width="2.5" height="30" fill="#7D4F23" />
@@ -681,7 +1002,6 @@
           <circle cx="${leftAnchorX + 4.5}" cy="${bridgeY + 2}" r="1.5" fill="#C5CFD6" />
         </g>
 
-        <!-- Right Bridge Anchor Post -->
         <g id="bridge-anchor-right">
           <rect x="${rightAnchorX - 7}" y="${bridgeRopeTopY - 8}" width="9" height="34" rx="2" fill="#5A3716" stroke="#36200A" stroke-width="1.2" />
           <rect x="${rightAnchorX - 5.5}" y="${bridgeRopeTopY - 6}" width="2.5" height="30" fill="#7D4F23" />
@@ -692,23 +1012,20 @@
           <circle cx="${rightAnchorX - 4.5}" cy="${bridgeY + 2}" r="1.5" fill="#C5CFD6" />
         </g>
 
-        <!-- Lower Bridge Deck Rope Curve -->
         <path d="M ${leftAnchorX + 4} ${bridgeY + 3} Q ${canyonLeft + canyonWidth * 0.5} ${bridgeY + 6} ${rightAnchorX - 4} ${bridgeY + 3}" stroke="#4D2E12" stroke-width="4.5" fill="none" stroke-linecap="round" />
 
         <g id="bridge-walkway-planks">
           ${bridgePlanksSvg}
         </g>
 
-        <!-- Upper Handrail Ropes -->
         <path d="M ${leftAnchorX + 4} ${bridgeRopeTopY + 1} Q ${canyonLeft + canyonWidth * 0.5} ${bridgeRopeTopY + 4} ${rightAnchorX - 4} ${bridgeRopeTopY + 1}" stroke="${pal.bridgeRope}" stroke-width="2.6" fill="none" stroke-linecap="round" />
         <path d="M ${leftAnchorX + 4} ${bridgeRopeTopY + 3} Q ${canyonLeft + canyonWidth * 0.5} ${bridgeRopeTopY + 6} ${rightAnchorX - 4} ${bridgeRopeTopY + 3}" stroke="#8B6638" stroke-width="1.2" fill="none" opacity="0.65" />
       </g>
     `;
 
-    // Scale Number Labels ("0 ft" and "2,000 ft") at Bridge Anchors (in cream pills)
+    // Scale Number Labels at Bridge Anchors (in cream pills)
     const scaleEndpointLabels = `
       <g id="scale-endpoint-labels" font-family="'Fredoka', system-ui, sans-serif" font-size="11" font-weight="700">
-        <!-- Left Scale Label (0 ft) in small cream pill -->
         <g transform="translate(${leftScaleLabelX}, ${bridgeRopeTopY - 14})">
           <rect x="-24" y="-9" width="48" height="18" rx="9" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
           <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
@@ -716,7 +1033,6 @@
           </text>
         </g>
 
-        <!-- Right Scale Label (2,000 ft) in small cream pill -->
         <g transform="translate(${rightScaleLabelX}, ${bridgeRopeTopY - 14})">
           <rect x="-30" y="-9" width="60" height="18" rx="9" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
           <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
@@ -726,111 +1042,194 @@
       </g>
     `;
 
-    // 6. Human Jumper (Moods only shown through jumper - Item 1)
+    // True Answer Bridge Marker (Item 2: Shows when jumper arrives at true answer spot)
+    let trueAnswerMarkerSvg = '';
+    if (state.revealData.showMarker) {
+      const mx = state.revealData.markerX;
+      trueAnswerMarkerSvg = `
+        <g id="true-answer-marker" transform="translate(${mx}, ${bridgeY})" filter="url(#softShadow)">
+          <!-- Marker flag pin on the bridge -->
+          <line x1="0" y1="-26" x2="0" y2="4" stroke="${pal.accentOrange}" stroke-width="2" stroke-linecap="round" />
+          <polygon points="0,-26 14,-20 0,-14" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.8" />
+          <circle cx="0" cy="4" r="2.5" fill="${pal.deepGreen}" />
+          <!-- Marker tooltip pill -->
+          <g transform="translate(0, -33)">
+            <rect x="-26" y="-8" width="52" height="16" rx="8" fill="${pal.creamBg}" stroke="${pal.accentOrange}" stroke-width="1.2" />
+            <text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-family="'Fredoka', system-ui, sans-serif" font-size="9.5" font-weight="700" fill="${pal.deepGreen}">
+              ${formatNum(state.revealData.markerValue)}
+            </text>
+          </g>
+        </g>
+      `;
+    }
+
+    // 6. Human Jumper
     const jumperScale = layout.jumperScale;
+    const isCalibrating = state.mode === 'calibrating';
+    const activeEmotion = isCalibrating ? rangeData.emotion : state.revealData.emotion;
+    const currentJumperX = isCalibrating ? matCenter : state.revealData.jumperX;
+    const currentJumperY = isCalibrating ? bridgeY : state.revealData.jumperY;
+    const facing = state.revealData.jumperFacing || 1;
+
+    // Speech bubble SVG
+    let speechBubbleSvg = '';
+    if (state.revealData.speechBubble) {
+      const sb = state.revealData.speechBubble;
+      const isWhew = sb.type === 'hit';
+      const bubbleW = isWhew ? 64 : 88;
+      const bubbleH = 26;
+      speechBubbleSvg = `
+        <g id="jumper-speech-bubble" class="${isWhew ? '' : 'bubble-wobble'}" transform="translate(24, -42)" filter="url(#softShadow)">
+          <path d="M 0 0 L -8 10 L 0 6 Z" fill="${pal.creamBg}" />
+          <rect x="-6" y="-13" width="${bubbleW}" height="${bubbleH}" rx="12" fill="${pal.creamBg}" stroke="${isWhew ? '#2E7D32' : pal.accentOrange}" stroke-width="1.6" />
+          <text x="${bubbleW / 2 - 6}" y="0" text-anchor="middle" dominant-baseline="central" font-family="'Fredoka', system-ui, sans-serif" font-size="12" font-weight="700" fill="${isWhew ? '#2E7D32' : pal.accentOrange}">
+            ${sb.text}
+          </text>
+        </g>
+      `;
+    }
+
     const jumper = `
-      <g id="jumper-container" class="emotion-${rangeData.emotion}" transform="translate(${matCenter}, ${bridgeY})" style="--jumper-pace-extent: ${jumperPaceExtent}px;">
-        <g class="jumper-pacing">
-          <g transform="scale(${jumperScale.toFixed(2)})">
-            <!-- Tremble group active in panic mode -->
-            <g class="jumper-tremble-group">
-              <g class="jumper-body-bob">
-                <ellipse cx="0" cy="0" rx="7.5" ry="2.2" fill="#2E1B0B" opacity="0.5" />
+      <g
+        id="jumper-container"
+        class="emotion-${activeEmotion}"
+        transform="translate(${currentJumperX}, ${currentJumperY})"
+        style="--jumper-pace-extent: ${jumperPaceExtent}px; opacity: ${state.revealData.jumperOpacity}; transition: opacity 0.3s ease;"
+      >
+        <g class="${isCalibrating ? 'jumper-pacing' : ''}">
+          <g class="jumper-scaler" transform="scale(${jumperScale.toFixed(2)})">
+            <g transform="scale(${facing}, 1)">
+              <g class="jumper-tremble-group">
+                <g class="${state.revealData.isWalking ? 'jumper-walking-legs' : 'jumper-body-bob'}">
+                  <ellipse cx="0" cy="0" rx="7.5" ry="2.2" fill="#2E1B0B" opacity="0.4" />
 
-                <!-- Boots & Legs -->
-                <rect x="-6" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
-                <rect x="1.8" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
-                <line x1="-6" y1="-1" x2="-1.8" y2="-1" stroke="#3D3025" stroke-width="1" />
-                <line x1="1.8" y1="-1" x2="6" y2="-1" stroke="#3D3025" stroke-width="1" />
+                  <!-- Boots & Legs -->
+                  <rect x="-6" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
+                  <rect x="1.8" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
+                  <line x1="-6" y1="-1" x2="-1.8" y2="-1" stroke="#3D3025" stroke-width="1" />
+                  <line x1="1.8" y1="-1" x2="6" y2="-1" stroke="#3D3025" stroke-width="1" />
 
-                <path d="M -5.5 -15 L -1.8 -15 L -1.8 -5 L -5.5 -5 Z" fill="#243038" />
-                <path d="M 1.8 -15 L 5.5 -15 L 5.5 -5 L 1.8 -5 Z" fill="#243038" />
-                <rect x="-6.5" y="-17.5" width="13" height="2.6" fill="#161E22" rx="0.5" />
-                <rect x="-1.5" y="-17.5" width="3" height="2.6" fill="#D9822B" rx="0.5" />
+                  <path d="M -5.5 -15 L -1.8 -15 L -1.8 -5 L -5.5 -5 Z" fill="#243038" />
+                  <path d="M 1.8 -15 L 5.5 -15 L 5.5 -5 L 1.8 -5 Z" fill="#243038" />
+                  <rect x="-6.5" y="-17.5" width="13" height="2.6" fill="#161E22" rx="0.5" />
+                  <rect x="-1.5" y="-17.5" width="3" height="2.6" fill="#D9822B" rx="0.5" />
 
-                <!-- Jumpsuit Torso -->
-                <path d="M -6.8 -28.5 L 6.8 -28.5 L 5.5 -17.5 L -5.5 -17.5 Z" fill="${pal.accentOrange}" />
-                <line x1="0" y1="-28.5" x2="0" y2="-17.5" stroke="#9E3011" stroke-width="1.1" />
-                <path d="M -2.5 -28.5 L 0 -25.5 L 2.5 -28.5" stroke="#FFE4D6" stroke-width="0.8" fill="none" />
+                  <!-- Jumpsuit Torso -->
+                  <path d="M -6.8 -28.5 L 6.8 -28.5 L 5.5 -17.5 L -5.5 -17.5 Z" fill="${pal.accentOrange}" />
+                  <line x1="0" y1="-28.5" x2="0" y2="-17.5" stroke="#9E3011" stroke-width="1.1" />
+                  <path d="M -2.5 -28.5 L 0 -25.5 L 2.5 -28.5" stroke="#FFE4D6" stroke-width="0.8" fill="none" />
 
-                <!-- Head & Helmet Base -->
-                <rect x="-2.2" y="-30.5" width="4.4" height="2.5" fill="#E2A684" />
-                <ellipse cx="0" cy="-33" rx="6.5" ry="6.2" fill="#E2A684" />
-                <path d="M -6.8 -33.5 Q -7.2 -42 0 -42 Q 7.2 -42 6.8 -33.5 Z" fill="#26343C" />
-                <rect x="-6.8" y="-34.5" width="13.6" height="2" fill="#1B262D" rx="0.5" />
+                  <!-- Head & Helmet Base -->
+                  <rect x="-2.2" y="-30.5" width="4.4" height="2.5" fill="#E2A684" />
+                  <ellipse cx="0" cy="-33" rx="6.5" ry="6.2" fill="#E2A684" />
+                  <path d="M -6.8 -33.5 Q -7.2 -42 0 -42 Q 7.2 -42 6.8 -33.5 Z" fill="#26343C" />
+                  <rect x="-6.8" y="-34.5" width="13.6" height="2" fill="#1B262D" rx="0.5" />
 
-                <!-- White Goggle Frames & Lenses -->
-                <rect x="-6.6" y="-35" width="13.2" height="2" fill="#192228" />
-                <circle cx="-3.3" cy="-33.2" r="3.2" fill="#FFFFFF" stroke="#1F2A30" stroke-width="0.9" />
-                <circle cx="3.3" cy="-33.2" r="3.2" fill="#FFFFFF" stroke="#1F2A30" stroke-width="0.9" />
+                  <!-- White Goggle Frames & Lenses -->
+                  <rect x="-6.6" y="-35" width="13.2" height="2" fill="#192228" />
+                  <circle cx="-3.3" cy="-33.2" r="3.2" fill="#FFFFFF" stroke="#1F2A30" stroke-width="0.9" />
+                  <circle cx="3.3" cy="-33.2" r="3.2" fill="#FFFFFF" stroke="#1F2A30" stroke-width="0.9" />
 
-                <!-- ==================== MOOD 1: CHILL ==================== -->
-                <g class="mood-layer mood-layer-chill">
-                  <path d="M -4.4 -32.8 Q -3.3 -34.5 -2.2 -32.8" stroke="#1A2126" stroke-width="0.9" fill="none" stroke-linecap="round" />
-                  <path d="M 2.2 -32.8 Q 3.3 -34.5 4.4 -32.8" stroke="#1A2126" stroke-width="0.9" fill="none" stroke-linecap="round" />
-                  <path d="M -2.5 -29.2 Q 0 -27.3 2.5 -29.2" stroke="#8E3C18" stroke-width="0.95" fill="none" stroke-linecap="round" />
-                  <path class="chill-arm-left" d="M -6.8 -27.5 Q -9.5 -22 -8.5 -17" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                  <path class="chill-arm-right" d="M 6.8 -27.5 Q 9.5 -22 8.5 -17" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                  <circle cx="-8.5" cy="-16.5" r="1.4" fill="#E2A684" />
-                  <circle cx="8.5" cy="-16.5" r="1.4" fill="#E2A684" />
-                </g>
-
-                <!-- ==================== MOOD 2: NERVOUS ==================== -->
-                <g class="mood-layer mood-layer-nervous">
-                  <g class="darting-pupils-group">
-                    <circle class="darting-pupil" cx="-3.3" cy="-33.2" r="1.15" fill="#1A2126" />
-                    <circle class="darting-pupil" cx="3.3" cy="-33.2" r="1.15" fill="#1A2126" />
+                  <!-- MOOD 1: CHILL -->
+                  <g class="mood-layer mood-layer-chill">
+                    <path d="M -4.4 -32.8 Q -3.3 -34.5 -2.2 -32.8" stroke="#1A2126" stroke-width="0.9" fill="none" stroke-linecap="round" />
+                    <path d="M 2.2 -32.8 Q 3.3 -34.5 4.4 -32.8" stroke="#1A2126" stroke-width="0.9" fill="none" stroke-linecap="round" />
+                    <path d="M -2.5 -29.2 Q 0 -27.3 2.5 -29.2" stroke="#8E3C18" stroke-width="0.95" fill="none" stroke-linecap="round" />
+                    <path class="chill-arm-left" d="M -6.8 -27.5 Q -9.5 -22 -8.5 -17" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path class="chill-arm-right" d="M 6.8 -27.5 Q 9.5 -22 8.5 -17" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-8.5" cy="-16.5" r="1.4" fill="#E2A684" />
+                    <circle cx="8.5" cy="-16.5" r="1.4" fill="#E2A684" />
                   </g>
-                  <line x1="-5.2" y1="-36.4" x2="-2.0" y2="-37.3" stroke="#1A2126" stroke-width="0.8" stroke-linecap="round" />
-                  <line x1="5.2" y1="-36.4" x2="2.0" y2="-37.3" stroke="#1A2126" stroke-width="0.8" stroke-linecap="round" />
-                  <line x1="-2.3" y1="-29.2" x2="2.3" y2="-29.2" stroke="#8E3C18" stroke-width="0.95" stroke-linecap="round" />
-                  <g class="clasped-hands-group">
-                    <path d="M -6.8 -27.5 Q -4 -22 -1 -22" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <path d="M 6.8 -27.5 Q 4 -22 1 -22" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <ellipse cx="0" cy="-22" rx="2.2" ry="1.6" fill="#E2A684" stroke="#8E3C18" stroke-width="0.5" />
-                  </g>
-                  <path class="sweat-drop sweat-drop-nervous-1" d="M -8.2 -36.5 Q -9.4 -34.5 -8.2 -33.5 Q -7 -34.5 -8.2 -36.5 Z" fill="#64B5F6" />
-                  <path class="sweat-drop sweat-drop-nervous-2" d="M 8.2 -37.5 Q 9.4 -35.5 8.2 -34.5 Q 7 -35.5 8.2 -37.5 Z" fill="#64B5F6" />
-                  <path class="sweat-drop sweat-drop-nervous-3" d="M -7.2 -31.5 Q -8.2 -29.8 -7.2 -29.0 Q -6.2 -29.8 -7.2 -31.5 Z" fill="#64B5F6" />
-                </g>
 
-                <!-- ==================== MOOD 3: PANIC ==================== -->
-                <g class="mood-layer mood-layer-panic">
-                  <circle cx="-3.3" cy="-33.2" r="0.75" fill="#000000" />
-                  <circle cx="3.3" cy="-33.2" r="0.75" fill="#000000" />
-                  <path d="M -5.2 -37.8 Q -3.3 -39.4 -1.5 -37.6" stroke="#1A2126" stroke-width="0.95" fill="none" stroke-linecap="round" />
-                  <path d="M 5.2 -37.8 Q 3.3 -39.4 1.5 -37.6" stroke="#1A2126" stroke-width="0.95" fill="none" stroke-linecap="round" />
-                  <g class="panic-mouth-group">
-                    <ellipse class="panic-mouth-shape" cx="0" cy="-29.2" rx="1.9" ry="2.3" fill="#360800" stroke="#7A1800" stroke-width="0.7" />
-                    <path d="M -1.2 -29.8 Q 0 -30.6 1.2 -29.8" stroke="#FFFFFF" stroke-width="0.7" fill="none" stroke-linecap="round" />
-                    <ellipse cx="0" cy="-27.9" rx="1.1" ry="0.8" fill="#E84855" />
+                  <!-- MOOD 2: NERVOUS -->
+                  <g class="mood-layer mood-layer-nervous">
+                    <g class="darting-pupils-group">
+                      <circle class="darting-pupil" cx="-3.3" cy="-33.2" r="1.15" fill="#1A2126" />
+                      <circle class="darting-pupil" cx="3.3" cy="-33.2" r="1.15" fill="#1A2126" />
+                    </g>
+                    <line x1="-5.2" y1="-36.4" x2="-2.0" y2="-37.3" stroke="#1A2126" stroke-width="0.8" stroke-linecap="round" />
+                    <line x1="5.2" y1="-36.4" x2="2.0" y2="-37.3" stroke="#1A2126" stroke-width="0.8" stroke-linecap="round" />
+                    <line x1="-2.3" y1="-29.2" x2="2.3" y2="-29.2" stroke="#8E3C18" stroke-width="0.95" stroke-linecap="round" />
+                    <g class="clasped-hands-group">
+                      <path d="M -6.8 -27.5 Q -4 -22 -1 -22" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                      <path d="M 6.8 -27.5 Q 4 -22 1 -22" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                      <ellipse cx="0" cy="-22" rx="2.2" ry="1.6" fill="#E2A684" stroke="#8E3C18" stroke-width="0.5" />
+                    </g>
+                    <path class="sweat-drop sweat-drop-nervous-1" d="M -8.2 -36.5 Q -9.4 -34.5 -8.2 -33.5 Q -7 -34.5 -8.2 -36.5 Z" fill="#64B5F6" />
+                    <path class="sweat-drop sweat-drop-nervous-2" d="M 8.2 -37.5 Q 9.4 -35.5 8.2 -34.5 Q 7 -35.5 8.2 -37.5 Z" fill="#64B5F6" />
+                    <path class="sweat-drop sweat-drop-nervous-3" d="M -7.2 -31.5 Q -8.2 -29.8 -7.2 -29.0 Q -6.2 -29.8 -7.2 -31.5 Z" fill="#64B5F6" />
                   </g>
-                  <g class="flailing-arm-left">
-                    <path d="M -6.8 -27.5 Q -10 -34 -8 -39" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <circle cx="-8" cy="-39" r="1.5" fill="#E2A684" />
+
+                  <!-- MOOD 3: PANIC -->
+                  <g class="mood-layer mood-layer-panic">
+                    <circle cx="-3.3" cy="-33.2" r="0.75" fill="#000000" />
+                    <circle cx="3.3" cy="-33.2" r="0.75" fill="#000000" />
+                    <path d="M -5.2 -37.8 Q -3.3 -39.4 -1.5 -37.6" stroke="#1A2126" stroke-width="0.95" fill="none" stroke-linecap="round" />
+                    <path d="M 5.2 -37.8 Q 3.3 -39.4 1.5 -37.6" stroke="#1A2126" stroke-width="0.95" fill="none" stroke-linecap="round" />
+                    <g class="panic-mouth-group">
+                      <ellipse class="panic-mouth-shape" cx="0" cy="-29.2" rx="1.9" ry="2.3" fill="#360800" stroke="#7A1800" stroke-width="0.7" />
+                      <path d="M -1.2 -29.8 Q 0 -30.6 1.2 -29.8" stroke="#FFFFFF" stroke-width="0.7" fill="none" stroke-linecap="round" />
+                      <ellipse cx="0" cy="-27.9" rx="1.1" ry="0.8" fill="#E84855" />
+                    </g>
+                    <g class="flailing-arm-left">
+                      <path d="M -6.8 -27.5 Q -10 -34 -8 -39" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                      <circle cx="-8" cy="-39" r="1.5" fill="#E2A684" />
+                    </g>
+                    <g class="flailing-arm-right">
+                      <path d="M 6.8 -27.5 Q 10 -34 8 -39" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                      <circle cx="8" cy="-39" r="1.5" fill="#E2A684" />
+                    </g>
+                    <path class="sweat-drop panic-sweat-right" d="M 9.5 -37 Q 12 -39 13.5 -36 Q 11 -35 9.5 -37 Z" fill="#4FC3F7" />
+                    <path class="sweat-drop panic-sweat-left" d="M -9.5 -37 Q -12 -39 -13.5 -36 Q -11 -35 -9.5 -37 Z" fill="#4FC3F7" />
+                    <g class="shake-lines" stroke="#3D2012" stroke-width="0.8" stroke-linecap="round">
+                      <line x1="-11" y1="-26" x2="-9" y2="-25" />
+                      <line x1="-11.5" y1="-21" x2="-9.5" y2="-21" />
+                      <line x1="11" y1="-26" x2="9" y2="-25" />
+                      <line x1="11.5" y1="-21" x2="9.5" y2="-21" />
+                    </g>
                   </g>
-                  <g class="flailing-arm-right">
-                    <path d="M 6.8 -27.5 Q 10 -34 8 -39" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <circle cx="8" cy="-39" r="1.5" fill="#E2A684" />
+
+                  <!-- MOOD 4: RELIEVED (Item 4 - Whew! Landing face) -->
+                  <g class="mood-layer mood-layer-relieved">
+                    <!-- Happy arc eyes (^ ^) -->
+                    <path d="M -4.8 -32.8 Q -3.3 -35 -1.8 -32.8" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
+                    <path d="M 1.8 -32.8 Q 3.3 -35 4.8 -32.8" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
+                    <!-- Big relieved open smile -->
+                    <path d="M -2.8 -29.2 Q 0 -26.2 2.8 -29.2" stroke="#8E3C18" stroke-width="1.1" fill="#FFE2C6" stroke-linecap="round" />
+                    <!-- Arms open wide in triumph/relief -->
+                    <path d="M -6.8 -27.5 Q -10 -25 -11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path d="M 6.8 -27.5 Q 10 -25 11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-11" cy="-19.5" r="1.4" fill="#E2A684" />
+                    <circle cx="11" cy="-19.5" r="1.4" fill="#E2A684" />
                   </g>
-                  <path class="sweat-drop panic-sweat-right" d="M 9.5 -37 Q 12 -39 13.5 -36 Q 11 -35 9.5 -37 Z" fill="#4FC3F7" />
-                  <path class="sweat-drop panic-sweat-left" d="M -9.5 -37 Q -12 -39 -13.5 -36 Q -11 -35 -9.5 -37 Z" fill="#4FC3F7" />
-                  <g class="shake-lines" stroke="#3D2012" stroke-width="0.8" stroke-linecap="round">
-                    <line x1="-11" y1="-26" x2="-9" y2="-25" />
-                    <line x1="-11.5" y1="-21" x2="-9.5" y2="-21" />
-                    <line x1="11" y1="-26" x2="9" y2="-25" />
-                    <line x1="11.5" y1="-21" x2="9.5" y2="-21" />
+
+                  <!-- MOOD 5: SCREAMING (Item 5 - Plunging past mattress into abyss) -->
+                  <g class="mood-layer mood-layer-screaming">
+                    <circle cx="-3.3" cy="-33.2" r="0.65" fill="#000000" />
+                    <circle cx="3.3" cy="-33.2" r="0.65" fill="#000000" />
+                    <!-- Arched terrified brows -->
+                    <path d="M -5.5 -38.5 Q -3.3 -40.5 -1.2 -38.5" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
+                    <path d="M 5.5 -38.5 Q 3.3 -40.5 1.2 -38.5" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
+                    <!-- Large screaming mouth -->
+                    <ellipse cx="0" cy="-28.8" rx="2.4" ry="3.2" fill="#2B0500" stroke="#7A1800" stroke-width="0.8" />
+                    <ellipse cx="0" cy="-27.2" rx="1.4" ry="1.0" fill="#E84855" />
+                    <!-- Arms flailing upwards in terror -->
+                    <path d="M -6.8 -27.5 Q -11 -35 -9 -41" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path d="M 6.8 -27.5 Q 11 -35 8 -41" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-9" cy="-41" r="1.5" fill="#E2A684" />
+                    <circle cx="8" cy="-41" r="1.5" fill="#E2A684" />
                   </g>
+
                 </g>
               </g>
             </g>
           </g>
         </g>
+        ${speechBubbleSvg}
       </g>
     `;
 
-    // 7. Mattress Assembly & Draggable Straps (Item 3)
-    // Mattress tufts
+    // 7. Mattress Assembly & Draggable Straps
     let mattressTufts = '';
     if (matWidth > 20) {
       const tuftSpacing = 14;
@@ -845,27 +1244,24 @@
       }
     }
 
-    // Suspension cables: connect from cliff wall anchor bolts to buckles atop straps
+    // Suspension cables: Item 8 CLEANUP: ONLY solid cables remain; dashed stabilizer lines deleted!
     const cables = `
       <g stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round">
         <line x1="${canyonLeft}" y1="210" x2="${strapLeftCenterX}" y2="${strapTopY}" />
         <line x1="${canyonRight}" y1="210" x2="${strapRightCenterX}" y2="${strapTopY}" />
-        <!-- Lower stabilizer cables -->
-        <line x1="${canyonLeft}" y1="340" x2="${strapLeftCenterX}" y2="${mattressY + mattressHeight}" opacity="0.6" stroke-dasharray="3,3" />
-        <line x1="${canyonRight}" y1="340" x2="${strapRightCenterX}" y2="${mattressY + mattressHeight}" opacity="0.6" stroke-dasharray="3,3" />
       </g>
       <circle cx="${canyonLeft}" cy="210" r="3.5" fill="#3D4A47" />
       <circle cx="${canyonRight}" cy="210" r="3.5" fill="#3D4A47" />
     `;
 
-    // Thin vertical fabric straps (3.5px wide):
-    // Exactly as tall as mattress + 3px at each end, not sticking out above and below (Item 3).
+    // Thin vertical fabric straps
+    const isLocked = state.mode !== 'calibrating';
     const straps = `
       <!-- Left Draggable Strap Handle -->
       <g
         id="handle-left"
-        class="handle-group ${state.activeDragHandle === 'left' ? 'dragging' : ''}"
-        tabindex="0"
+        class="handle-group ${state.activeDragHandle === 'left' ? 'dragging' : ''} ${isLocked ? 'locked' : ''}"
+        tabindex="${isLocked ? '-1' : '0'}"
         role="slider"
         aria-label="Lower range boundary handle"
         aria-valuemin="${min}"
@@ -873,27 +1269,18 @@
         aria-valuenow="${rangeData.lo}"
         aria-valuetext="${formatNum(rangeData.lo)} ${state.question.unit}"
       >
-        <!-- Keyboard Focus Ring Halo -->
         <circle class="handle-focus-ring" cx="${strapLeftCenterX}" cy="${mattressY + mattressHeight / 2}" r="20" fill="none" stroke="${pal.deepGreen}" stroke-width="2" stroke-dasharray="3,3" />
-
-        <!-- 44px Invisible Touch Hitbox -->
         <rect x="${strapLeftCenterX - 38}" y="${mattressY - 12}" width="44" height="${mattressHeight + 24}" fill="transparent" pointer-events="all" />
-
-        <!-- Metal Buckle Ring at top of strap (+3px end) -->
         <rect x="${strapLeftCenterX - 2.5}" y="${strapTopY}" width="5" height="3" rx="0.8" fill="none" stroke="${pal.buckle}" stroke-width="1.1" />
-
-        <!-- Thin Vertical Fabric Strap (3.5px wide, exactly mattressHeight + 6px tall) -->
         <rect x="${strapLeftCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.6" />
-
-        <!-- Stitched Center Line -->
         <line x1="${strapLeftCenterX}" y1="${strapTopY + 1}" x2="${strapLeftCenterX}" y2="${strapBottomY - 1}" stroke="${pal.strapStitch}" stroke-width="0.7" stroke-dasharray="2,1.2" />
       </g>
 
       <!-- Right Draggable Strap Handle -->
       <g
         id="handle-right"
-        class="handle-group ${state.activeDragHandle === 'right' ? 'dragging' : ''}"
-        tabindex="0"
+        class="handle-group ${state.activeDragHandle === 'right' ? 'dragging' : ''} ${isLocked ? 'locked' : ''}"
+        tabindex="${isLocked ? '-1' : '0'}"
         role="slider"
         aria-label="Upper range boundary handle"
         aria-valuemin="${state.currentLo + Math.round((max - min) * CONFIG.MIN_WIDTH_RATIO)}"
@@ -901,33 +1288,23 @@
         aria-valuenow="${rangeData.hi}"
         aria-valuetext="${formatNum(rangeData.hi)} ${state.question.unit}"
       >
-        <!-- Keyboard Focus Ring Halo -->
         <circle class="handle-focus-ring" cx="${strapRightCenterX}" cy="${mattressY + mattressHeight / 2}" r="20" fill="none" stroke="${pal.deepGreen}" stroke-width="2" stroke-dasharray="3,3" />
-
-        <!-- 44px Invisible Touch Hitbox -->
         <rect x="${strapRightCenterX - 6}" y="${mattressY - 12}" width="44" height="${mattressHeight + 24}" fill="transparent" pointer-events="all" />
-
-        <!-- Metal Buckle Ring at top of strap (+3px end) -->
         <rect x="${strapRightCenterX - 2.5}" y="${strapTopY}" width="5" height="3" rx="0.8" fill="none" stroke="${pal.buckle}" stroke-width="1.1" />
-
-        <!-- Thin Vertical Fabric Strap (3.5px wide, exactly mattressHeight + 6px tall) -->
         <rect x="${strapRightCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.6" />
-
-        <!-- Stitched Center Line -->
         <line x1="${strapRightCenterX}" y1="${strapTopY + 1}" x2="${strapRightCenterX}" y2="${strapBottomY - 1}" stroke="${pal.strapStitch}" stroke-width="0.7" stroke-dasharray="2,1.2" />
       </g>
     `;
 
-    // Mattress Assembly: 25% less tall (21px), clean quilted white mattress (Item 3)
-    const mattress = `
-      <g id="mattress-assembly" filter="url(#softShadow)">
-        <!-- Box spring under mattress -->
-        <rect x="${matLeft}" y="${mattressY + mattressHeight - 4}" width="${matWidth}" height="4" rx="0.8" fill="url(#boxSpringGrad)" stroke="#9CA7AF" stroke-width="0.7" />
+    // Mattress Assembly with Item 1 lock shake & Item 4 hit squash classes
+    const shakeClass = state.revealData.mattressShake ? 'straps-locked-shake' : '';
+    const squashClass = state.revealData.mattressSquashing ? 'mattress-squash' : '';
 
-        <!-- White mattress body strictly spanning between range edges -->
+    const mattress = `
+      <g id="mattress-assembly" class="${shakeClass} ${squashClass}" filter="url(#softShadow)">
+        <rect x="${matLeft}" y="${mattressY + mattressHeight - 4}" width="${matWidth}" height="4" rx="0.8" fill="url(#boxSpringGrad)" stroke="#9CA7AF" stroke-width="0.7" />
         <rect x="${matLeft}" y="${mattressY}" width="${matWidth}" height="${mattressHeight - 3}" rx="${Math.min(3, Math.max(1, matWidth / 2))}" fill="url(#mattressThickGrad)" stroke="${pal.mattressOutline}" stroke-width="1.1" />
 
-        <!-- Quilted piping lines -->
         ${matWidth > 18 ? `
           <path d="M ${matLeft + 2} ${mattressY + 5} Q ${matCenter} ${mattressY + 6.2} ${matRight - 2} ${mattressY + 5}" stroke="#D3DBE0" stroke-width="0.9" fill="none" />
           <path d="M ${matLeft + 2} ${mattressY + 10} Q ${matCenter} ${mattressY + 11} ${matRight - 2} ${mattressY + 10}" stroke="#E3E8EC" stroke-width="0.8" stroke-dasharray="2.5,2" fill="none" />
@@ -936,13 +1313,12 @@
 
         ${mattressTufts}
 
-        <!-- Entire Mattress Body Draggable Area -->
         <g
           id="handle-mattress"
-          class="mattress-drag-group ${state.activeDragHandle === 'mattress' ? 'dragging' : ''}"
-          tabindex="0"
+          class="mattress-drag-group ${state.activeDragHandle === 'mattress' ? 'dragging' : ''} ${isLocked ? 'locked' : ''}"
+          tabindex="${isLocked ? '-1' : '0'}"
           role="slider"
-          aria-label="Draggable mattress body: drag or use arrow keys to move entire range"
+          aria-label="Draggable mattress body"
           aria-valuemin="${min}"
           aria-valuemax="${max}"
           aria-valuenow="${rangeData.lo}"
@@ -955,9 +1331,7 @@
       </g>
     `;
 
-    // 8. Range Extrema Numbers with Cream Pill Background (Item 6):
-    // Gives number text under straps and merged label a cream pill background
-    // for at least 4.5:1 contrast on the dark abyss.
+    // 8. Range Extrema Numbers with Cream Pill Background
     let strapNumbers = '';
     if (shouldMergeLabels) {
       const mergedText = `${leftNumStr} – ${rightNumStr}`;
@@ -966,7 +1340,6 @@
       strapNumbers = `
         <g id="strap-number-badges" font-family="'Fredoka', system-ui, sans-serif" font-size="11.5" font-weight="700">
           <g transform="translate(${mergedX}, ${labelY})">
-            <!-- Cream pill background -->
             <rect x="${-pillW / 2}" y="${-pillH / 2}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
             <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
               ${mergedText}
@@ -980,7 +1353,6 @@
       const pillH = 18;
       strapNumbers = `
         <g id="strap-number-badges" font-family="'Fredoka', system-ui, sans-serif" font-size="11.5" font-weight="700">
-          <!-- Left Strap Number with Cream Pill -->
           <g transform="translate(${numLeftX}, ${labelY})">
             <rect x="${-pillWLeft / 2}" y="${-pillH / 2}" width="${pillWLeft}" height="${pillH}" rx="${pillH / 2}" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
             <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
@@ -988,7 +1360,6 @@
             </text>
           </g>
 
-          <!-- Right Strap Number with Cream Pill -->
           <g transform="translate(${numRightX}, ${labelY})">
             <rect x="${-pillWRight / 2}" y="${-pillH / 2}" width="${pillWRight}" height="${pillH}" rx="${pillH / 2}" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
             <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
@@ -999,7 +1370,7 @@
       `;
     }
 
-    // 9. Multiplier floating above mattress (Centered in cream pill)
+    // 9. Multiplier floating above mattress
     const multiplierDisplay = `
       <g transform="translate(${matCenter}, ${mattressY - 17})">
         <rect x="-25" y="-12" width="50" height="24" rx="12" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
@@ -1018,7 +1389,7 @@
       </g>
     `;
 
-    // Assemble complete dynamic SVG
+    // Assemble SVG
     const svgContent = `
       <svg
         id="game-canvas"
@@ -1039,6 +1410,7 @@
         ${pineTrees}
         ${bridge}
         ${scaleEndpointLabels}
+        ${trueAnswerMarkerSvg}
         ${jumper}
         ${cables}
         ${mattress}
@@ -1049,10 +1421,7 @@
 
     container.innerHTML = svgContent;
 
-    // Attach pointer and keyboard event listeners
     bindHandleEvents();
-
-    // Update textual readouts outside SVG
     updateReadouts(rangeData);
   }
 
@@ -1060,6 +1429,8 @@
    * Bind Pointer and Keyboard Drag Events to Handle Straps & Mattress Body
    */
   function bindHandleEvents() {
+    if (state.mode !== 'calibrating') return;
+
     const handleLeft = document.getElementById('handle-left');
     const handleRight = document.getElementById('handle-right');
     const handleMattress = document.getElementById('handle-mattress');
@@ -1072,6 +1443,7 @@
       if (!el) return;
 
       el.addEventListener('pointerdown', e => {
+        if (state.mode !== 'calibrating') return;
         e.preventDefault();
         e.stopPropagation();
 
@@ -1108,10 +1480,12 @@
       el.addEventListener('pointerup', stopDrag);
       el.addEventListener('pointercancel', stopDrag);
 
-      // Keyboard support: Arrow keys move by 10 ft, Shift+Arrow moves by 100 ft
+      // Keyboard support
       el.addEventListener('keydown', e => {
-        const step = e.shiftKey ? CONFIG.SHIFT_STEP_SIZE : CONFIG.STEP_SIZE;
-        const { min, max } = getQuestionScale(state.question);
+        if (state.mode !== 'calibrating') return;
+        const { min, max, total } = getQuestionScale(state.question);
+        const baseStep = total > 10000 ? 100 : 10;
+        const step = e.shiftKey ? baseStep * 10 : baseStep;
         let handled = false;
 
         if (handle === 'left') {
@@ -1205,12 +1579,19 @@
       }
     });
 
-    // Lock it in button
+    // Lock it in button: Triggers Reveal Animation
     const btnLock = document.getElementById('btn-lock-in');
     if (btnLock) {
       btnLock.addEventListener('click', () => {
-        const values = calculateRangeValues();
-        showToast(`Range Locked: ${formatNum(values.lo)} – ${formatNum(values.hi)} ft (${values.multiplier}x)`);
+        startRevealSequence();
+      });
+    }
+
+    // Next question button: Advances to next slot
+    const btnNext = document.getElementById('btn-next-question');
+    if (btnNext) {
+      btnNext.addEventListener('click', () => {
+        advanceToNextQuestion();
       });
     }
 
@@ -1230,34 +1611,92 @@
       });
     }
 
-    // Sky slot buttons
+    // Sky slot test buttons
     document.querySelectorAll('.sky-pill-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        setSlot(btn.dataset.slot);
+        setSlot(btn.dataset.slot, true);
       });
     });
 
-    // Palette buttons
+    // Palette test buttons
     document.querySelectorAll('.palette-pill-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         applyPalette(btn.dataset.palette);
       });
     });
+
+    // Custom True Answer Input & Button (Item in Test Controls)
+    const testInput = document.getElementById('test-true-answer-input');
+    const btnSetCustom = document.getElementById('btn-set-custom-answer');
+    if (btnSetCustom && testInput) {
+      const applyCustom = () => {
+        const val = Number(testInput.value);
+        if (!isNaN(val)) {
+          state.question.trueAnswer = val;
+          state.question.true_answer = val;
+          showToast(`Test Answer set to ${formatNum(val)}`);
+        }
+      };
+      btnSetCustom.addEventListener('click', applyCustom);
+      testInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') applyCustom();
+      });
+    }
+
+    // Force Hit button
+    const btnTestHit = document.getElementById('btn-test-hit');
+    if (btnTestHit) {
+      btnTestHit.addEventListener('click', () => {
+        const mid = Math.round((state.currentLo + state.currentHi) / 2);
+        state.question.trueAnswer = mid;
+        state.question.true_answer = mid;
+        if (testInput) testInput.value = mid;
+        showToast(`Forced Hit Answer: ${formatNum(mid)}`);
+      });
+    }
+
+    // Force Miss button
+    const btnTestMiss = document.getElementById('btn-test-miss');
+    if (btnTestMiss) {
+      btnTestMiss.addEventListener('click', () => {
+        const { min, max } = getQuestionScale(state.question);
+        let missAns;
+        if (state.currentLo > min + 80) {
+          missAns = min + 20;
+        } else {
+          missAns = max - 20;
+        }
+        state.question.trueAnswer = missAns;
+        state.question.true_answer = missAns;
+        if (testInput) testInput.value = missAns;
+        showToast(`Forced Miss Answer: ${formatNum(missAns)}`);
+      });
+    }
+
+    // Replay button (resets current question without advancing slot)
+    const btnReplay = document.getElementById('btn-replay');
+    if (btnReplay) {
+      btnReplay.addEventListener('click', () => {
+        setSlot(state.currentSlot, false);
+        showToast('Question reset for replay');
+      });
+    }
   }
 
   /**
    * Initialize Game Engine
    */
   function init() {
+    setSlot(state.currentSlot, true);
     applyPalette(state.currentPalette);
-    setSlot(state.currentSlot);
     initControls();
   }
 
-  // Expose computeScore for testing / Milestone 3
   window.computeScore = computeScore;
   window.numberToCanyonX = numberToCanyonX;
   window.canyonXToNumber = canyonXToNumber;
+  window.startRevealSequence = startRevealSequence;
+  window.advanceToNextQuestion = advanceToNextQuestion;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
