@@ -47,9 +47,9 @@ html, body {
   margin: 0;
   padding: 0;
   font-family: var(--font-body);
-  /* Continuous canyon abyss background: matches exact gradient stops all the way down */
-  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #7F9A90 35%, #4F6A62 55%, #1F3029 78%, #0B1612 100%);
-  background-color: #0B1612;
+  /* Continuous canyon abyss background: matches abyss gradient and continues #050B09 to bottom */
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #8AA39A 36%, #5E7A71 52%, #33463F 68%, #121C18 84%, #050B09 100%);
+  background-color: #050B09;
   color: var(--color-deep);
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
@@ -79,8 +79,9 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-  /* Canyon continues directly behind bottom card to the bottom edge: no dark strip */
-  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #7F9A90 35%, #4F6A62 55%, #1F3029 78%, #0B1612 100%);
+  /* Canyon continues directly behind bottom card to the bottom edge: #050B09 */
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #8AA39A 36%, #5E7A71 52%, #33463F 68%, #121C18 84%, #050B09 100%);
+  background-color: #050B09;
 }
 
 /* Middle Playable Scene Wrapper */
@@ -120,7 +121,7 @@ html, body {
   border: 1.5px solid var(--color-border);
   border-radius: 18px;
   padding: 10px 18px 11px 18px;
-  box-shadow: 0 8px 24px rgba(11, 22, 18, 0.22);
+  box-shadow: 0 8px 24px rgba(5, 11, 9, 0.28);
   text-align: center;
   z-index: 20;
   pointer-events: auto;
@@ -140,7 +141,7 @@ html, body {
   border: 1.5px solid var(--color-border);
   border-radius: 18px;
   padding: 10px 18px 12px 18px;
-  box-shadow: 0 8px 24px rgba(11, 22, 18, 0.28);
+  box-shadow: 0 8px 24px rgba(5, 11, 9, 0.35);
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -275,7 +276,6 @@ html, body {
 .range-label-row {
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-bottom: 2px;
 }
 
@@ -313,7 +313,7 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Lock it in Button */
+/* Lock it in Button (Normal capitalization as requested in Item 4) */
 .btn-lock {
   width: 100%;
   min-height: 44px;
@@ -322,8 +322,8 @@ html, body {
   font-family: var(--font-heading);
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none; /* Normal capitalization: "Lock it in" */
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -332,6 +332,7 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
+  touch-action: manipulation;
 }
 
 .btn-lock:hover {
@@ -437,7 +438,6 @@ html, body {
 }
 
 .emotion-panic .jumper-pacing {
-  /* Modest pace so jumper does not blur across narrow mattress */
   animation-duration: 1.9s;
 }
 
@@ -594,17 +594,17 @@ html, body {
 
 /* ==========================================================================
    DEVELOPER PREVIEW & THEME SWITCHER
-   Corner anchored so it never interferes with game
+   Item 5: Moved to be small at the very top-left of the screen
    ========================================================================== */
 .corner-test-panel {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 8px) + 8px);
-  left: 10px;
-  z-index: 40;
+  top: calc(env(safe-area-inset-top, 6px) + 6px);
+  left: 8px;
+  z-index: 50;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
   pointer-events: auto;
 }
 
@@ -612,20 +612,28 @@ html, body {
   background: var(--color-card-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1.5px solid var(--color-border);
-  border-radius: 20px;
-  padding: 6px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 3px 8px;
   font-family: var(--font-body);
   font-size: 11px;
   font-weight: 700;
   color: var(--color-deep);
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(11, 22, 18, 0.2);
+  box-shadow: 0 2px 8px rgba(5, 11, 9, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  touch-action: manipulation;
+}
+
+.corner-toggle-btn:hover {
+  background: #FFFBF2;
 }
 
 .corner-popup-content {
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 5px);
   left: 0;
   width: 210px;
   background: var(--color-card-bg);
@@ -634,7 +642,7 @@ html, body {
   border: 1.5px solid var(--color-border);
   border-radius: 14px;
   padding: 10px;
-  box-shadow: 0 8px 24px rgba(11, 22, 18, 0.25);
+  box-shadow: 0 8px 24px rgba(5, 11, 9, 0.32);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -695,7 +703,7 @@ html, body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.92);
-  background: rgba(27, 38, 30, 0.94);
+  background: rgba(18, 28, 24, 0.94);
   color: #FFF6E5;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -710,7 +718,7 @@ html, body {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.22s ease, transform 0.22s ease;
-  box-shadow: 0 12px 32px rgba(11, 22, 18, 0.45);
+  box-shadow: 0 12px 32px rgba(5, 11, 9, 0.5);
 }
 
 .toast-notice.show {
