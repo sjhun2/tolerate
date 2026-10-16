@@ -11,6 +11,11 @@ const CONFIG = {
   MAX_MULTIPLIER: 50,
   DEFAULT_PALETTE: 'golden', // Golden default
 
+  // Multiplier formula configuration: (scale / range_width) ** MULTIPLIER_EXPONENT
+  // Capped at (MAX_SCALE_RATIO ** MULTIPLIER_EXPONENT) ≈ 10.456
+  MULTIPLIER_EXPONENT: 0.6,
+  MAX_SCALE_RATIO: 50,
+
   // Milestone 2 slider constraints
   STEP_SIZE: 10,       // Arrow key step (10 ft)
   SHIFT_STEP_SIZE: 100, // Shift + Arrow key step (100 ft)
@@ -53,85 +58,81 @@ const CONFIG = {
       cables: '#667875',
       buckle: '#7F8E96',
       buckleHighlight: '#D2DCE2',
-      bridgeWood: '#8A562B',
-      bridgeRope: '#C7A274',
+      bridgeWood: '#805028',
+      bridgeRope: '#C8A270',
     },
     mint: {
       id: 'mint',
       name: 'Mint',
-      hills: '#A8D5BA',
-      hillsDark: '#7AA88C',
-      deepGreen: '#1F3D36',
-      creamBg: '#FFFFFF',
-      accentOrange: '#FF6B6B',
-      strapStitch: '#BD3B3B',
+      hills: '#88C999',
+      hillsDark: '#66A577',
+      deepGreen: '#285845',
+      creamBg: '#F3FAF5',
+      accentOrange: '#FF6B4A',
+      strapStitch: '#BD3217',
       mattress: '#FFFFFF',
       mattressOutline: '#C9CED2',
-      woodPlank: '#8C6239',
-      woodPlankDark: '#614022',
-      cables: '#647D76',
+      woodPlank: '#7E5B42',
+      woodPlankDark: '#573C29',
+      cables: '#5F7C73',
       buckle: '#7F8E96',
       buckleHighlight: '#D2DCE2',
-      bridgeWood: '#795028',
-      bridgeRope: '#B5946A',
+      bridgeWood: '#6E4522',
+      bridgeRope: '#BA9263',
     },
   },
 
-  // Daily Sky slots (Section 3 & Section 6)
+  // 3 Daily Sky Configurations (Spec Section 5)
   SLOTS: {
     1: {
-      slot: 1,
       name: 'Day',
-      label: 'Slot 1 · Day',
+      label: 'Morning / Afternoon',
       skyTop: '#BFE0F0',
       skyBottom: '#E6F3F8',
+      tintColor: 'transparent',
+      tintOpacity: 0,
       hasClouds: true,
       hasSun: false,
       hasMoon: false,
-      hasStars: false,
-      tintColor: 'transparent',
-      tintOpacity: 0,
+      sunColor: '#FFEAA7',
+      moonColor: '#FFFFFF',
     },
     2: {
-      slot: 2,
       name: 'Sunset',
-      label: 'Slot 2 · Sunset',
-      skyTop: '#6F5A9E',
-      skyBottom: '#F8B36A',
-      sunColor: '#FFE3A3',
+      label: 'Golden Hour / Dusk',
+      skyTop: '#F7A072',
+      skyBottom: '#FCEFD5',
+      tintColor: '#E27D60',
+      tintOpacity: 0.08,
       hasClouds: false,
       hasSun: true,
       hasMoon: false,
-      hasStars: false,
-      tintColor: '#FF8A3D',
-      tintOpacity: 0.14,
+      sunColor: '#FFAA5A',
+      moonColor: '#FFFFFF',
     },
     3: {
-      slot: 3,
       name: 'Night',
-      label: 'Slot 3 · Night',
-      skyTop: '#16224A',
-      skyBottom: '#3B4A7A',
-      moonColor: '#F4F1DE',
+      label: 'Starry Abyss',
+      skyTop: '#1B263B',
+      skyBottom: '#415A77',
+      tintColor: '#0D1B2A',
+      tintOpacity: 0.18,
       hasClouds: false,
       hasSun: false,
       hasMoon: true,
-      hasStars: true,
-      tintColor: '#0B1530',
-      tintOpacity: 0.40,
+      sunColor: '#FFFFFF',
+      moonColor: '#FFF3B0',
     },
   },
 
-  // Default question for preview
+  // Default Daily Question
   DEFAULT_QUESTION: {
-    id: 'demo-slot-1',
-    slot: 1,
-    question: 'How tall is the Eiffel Tower, in feet?',
+    id: 'eiffel_tower_height',
+    date: '2026-10-15',
+    text: 'How tall is the Eiffel Tower, in feet?',
     unit: 'ft',
     scale_min: 0,
     scale_max: 2000,
-    scale_type: 'linear',
-    source: 'Official Eiffel Tower Site (1,083 ft)',
     true_answer: 1083,
   },
 
@@ -149,10 +150,24 @@ const CONFIG = {
     BRIDGE_LEFT: 56,
     BRIDGE_RIGHT: 334,
 
-    // Mattress vertical placement: 60% down canyon, 20% thicker
+    // Mattress vertical placement: 60% down canyon
     MATTRESS_Y: 304,
-    MATTRESS_HEIGHT: 29, // 20% thicker than previous 24px
-    STRAP_WIDTH: 9,      // Narrow 8-10px fabric strap
+    MATTRESS_HEIGHT: 28,
+    STRAP_WIDTH: 3.5, // Thin strap centered on edge
+  },
+
+  // Responsive layout configuration for canyon proportions:
+  // Canyon width is about 6 jumper-heights.
+  // Phones: ~92% window width.
+  // Tablets & Computers: ~50% window width, never more than 1,000px wide.
+  RESPONSIVE: {
+    PHONE_CANYON_RATIO: 0.92,             // 92% of window width on portrait phones
+    TABLET_DESKTOP_CANYON_RATIO: 0.50,    // 50% of window width on tablets & computers
+    DESKTOP_MAX_CANYON_WIDTH_PX: 1000,    // Never more than 1,000px wide
+    BASE_VIEWBOX_HEIGHT: 420,
+    JUMPER_HEIGHT_UNITS: 42,              // Base jumper drawing height (scale 1.0)
+    JUMPER_MIN_HEIGHT_PX: 60,             // Jumper at least 60px tall
+    JUMPER_MAX_HEIGHT_PX: 165,            // Jumper at most about 165px tall
   },
 };
 
