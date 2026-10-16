@@ -195,7 +195,7 @@
       </defs>
     `;
 
-    // 1. Extended Full-Screen Sky (x from -1500 to 1900 so desktop sees sky edge-to-edge)
+    // 1. Extended Full-Screen Sky
     const skyRect = `<rect x="-1500" y="-300" width="3400" height="900" fill="url(#skyGrad)" />`;
 
     let skyFeatures = '';
@@ -245,7 +245,7 @@
       `;
     }
 
-    // Extended Distant Mountain Silhouette spanning full screen
+    // Extended Distant Mountain Silhouette
     const distantHills = `
       <path d="M -1500 135 Q -1000 115 -500 128 Q -100 112 195 130 Q 500 112 900 128 Q 1400 115 1900 135 L 1900 200 L -1500 200 Z" fill="#699E79" opacity="0.35" />
     `;
@@ -263,7 +263,7 @@
       <ellipse cx="180" cy="416" rx="150" ry="24" fill="#FFFFFF" opacity="0.95" />
     `;
 
-    // 3. Extended Left and Right Cliffs (Running out to -1500 and +1900 edge-to-edge)
+    // 3. Extended Left and Right Cliffs (Edge-to-Edge on wide screens)
     const leftCliff = `
       <path d="M -1500 100 Q -1000 95 -600 102 Q -200 100 55 124 L 70 146 L 70 430 L -1500 430 Z" fill="${pal.hills}" />
       <path d="M 55 124 L 70 146 L 70 430 L 64 430 L 64 150 L 50 128 Z" fill="${pal.hillsDark}" opacity="0.65" />
@@ -282,7 +282,7 @@
       <path d="M 1900 98 Q 1000 100 335 122 L 320 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
-    // 4. Extended Pine Trees (Framing canyon and populating wide desktop wings)
+    // 4. Pine Trees (Canyon framing + wide desktop wings)
     const pineTrees = `
       <!-- Left Extended Plateau Trees -->
       ${drawPineTree(-540, 102, 0.75, pal.deepGreen)}
@@ -474,7 +474,7 @@
       <circle cx="${canyonRight}" cy="210" r="3.5" fill="#3D4A47" />
     `;
 
-    // Vertical Fabric Straps with Buckles (User requirement: vertical fabric strap like seatbelt/luggage strap)
+    // Vertical Fabric Straps with Buckles
     const strapTopY = mattressY - 4;
     const strapBottomY = mattressY + mattressHeight + 3;
     const strapH = strapBottomY - strapTopY;
@@ -489,7 +489,7 @@
         <rect x="${strapLeftCenterX - 4.5}" y="${buckleLeftY - 3}" width="9" height="6" rx="1.5" fill="none" stroke="${pal.buckle}" stroke-width="1.8" />
         <rect x="${strapLeftCenterX - 3}" y="${buckleLeftY - 1.8}" width="6" height="3.6" rx="1" fill="${pal.buckleHighlight}" opacity="0.4" />
 
-        <!-- Vertical Fabric Strap (8-10px wide, runs slightly above top to slightly below bottom) -->
+        <!-- Vertical Fabric Strap (8-10px wide) -->
         <rect x="${strapLeftCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1.8" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.8" />
 
         <!-- Darker Stitched Center Line down strap -->
