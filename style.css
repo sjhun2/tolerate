@@ -1,7 +1,7 @@
 /* ==========================================================================
    Tolerate: The Deep Drop — Styles
    File: style.css
-   Full-screen edge-to-edge landscape with responsive phone-first vertical stack.
+   Full-screen edge-to-edge landscape with continuous canyon abyss to bottom edge.
    ========================================================================== */
 
 /* Google Fonts */
@@ -42,14 +42,18 @@
 
 html, body {
   width: 100vw;
+  height: 100%;
   min-height: 100dvh;
   margin: 0;
   padding: 0;
   font-family: var(--font-body);
-  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
+  /* Continuous canyon abyss background: matches exact gradient stops all the way down */
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #7F9A90 35%, #4F6A62 55%, #1F3029 78%, #0B1612 100%);
+  background-color: #0B1612;
   color: var(--color-deep);
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 
 /* Full-Screen Atmospheric Tint Overlay (Sunset warm tint / Night dark tint) */
@@ -65,154 +69,100 @@ html, body {
   z-index: 10;
 }
 
-/* ==========================================================================
-   DESKTOP / LAPTOP / IPAD LAYOUT (Screen width > 700px)
-   Keeps edge-to-edge wide scenery with floating cards
-   ========================================================================== */
-@media (min-width: 701px) {
-  html, body {
-    overflow: hidden;
-    position: fixed;
-    inset: 0;
-    height: 100dvh;
-  }
+/* Main Viewport Container */
+.game-viewport {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Canyon continues directly behind bottom card to the bottom edge: no dark strip */
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #7F9A90 35%, #4F6A62 55%, #1F3029 78%, #0B1612 100%);
+}
 
-  .game-viewport {
-    position: relative;
-    width: 100vw;
-    height: 100dvh;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
+/* Middle Playable Scene Wrapper */
+.scene-canvas-wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: calc(env(safe-area-inset-top, 8px) + 78px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 98px);
+  pointer-events: none;
+  touch-action: none;
+}
 
-  .scene-canvas-wrapper {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    pointer-events: none;
-    touch-action: none;
-  }
+.game-svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+  overflow: visible;
+  pointer-events: auto;
+}
 
-  .game-svg {
-    display: block;
-    height: 100%;
-    width: auto;
-    max-height: 100dvh;
-    aspect-ratio: 390 / 420;
-    overflow: visible;
-    pointer-events: auto;
-  }
+/* Floating Question Card (Top) */
+.floating-card-top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 8px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 560px;
+  background: var(--color-card-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid var(--color-border);
+  border-radius: 18px;
+  padding: 10px 18px 11px 18px;
+  box-shadow: 0 8px 24px rgba(11, 22, 18, 0.22);
+  text-align: center;
+  z-index: 20;
+  pointer-events: auto;
+}
 
-  .floating-card-top {
-    position: absolute;
-    top: calc(env(safe-area-inset-top, 8px) + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 20px);
-    max-width: 440px;
-    background: var(--color-card-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1.5px solid var(--color-border);
-    border-radius: 18px;
-    padding: 10px 16px 11px 16px;
-    box-shadow: 0 8px 24px rgba(45, 38, 20, 0.14);
-    text-align: center;
-    z-index: 20;
-    pointer-events: auto;
-  }
-
-  .floating-card-bottom {
-    position: absolute;
-    bottom: calc(env(safe-area-inset-bottom, 10px) + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 20px);
-    max-width: 440px;
-    background: var(--color-card-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1.5px solid var(--color-border);
-    border-radius: 18px;
-    padding: 11px 16px 13px 16px;
-    box-shadow: 0 8px 24px rgba(45, 38, 20, 0.14);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 20;
-    pointer-events: auto;
-  }
-
-  .corner-test-panel {
-    position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 10px) + 12px);
-    left: 16px;
-    z-index: 40;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    pointer-events: auto;
-  }
-
-  .corner-popup-content {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
-    width: 220px;
-  }
+/* Floating Range / Lock-in Card (Bottom) */
+.floating-card-bottom {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 10px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 560px;
+  background: var(--color-card-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid var(--color-border);
+  border-radius: 18px;
+  padding: 10px 18px 12px 18px;
+  box-shadow: 0 8px 24px rgba(11, 22, 18, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  z-index: 20;
+  pointer-events: auto;
 }
 
 /* ==========================================================================
-   MOBILE PHONE LAYOUT (Screen width <= 700px, e.g. iPhone portrait ~390px)
-   Vertical reserved layout: Top Card -> Scaled Canyon Scene -> Bottom Card
-   Guarantees zero overlap, zero zooming/cropping of the playable elements!
+   PHONE-SPECIFIC TUNING (<= 600px width)
+   Keeps the phone layout clean and preserves safe areas
    ========================================================================== */
-@media (max-width: 700px) {
-  html, body {
-    overflow-y: auto;
-    overflow-x: hidden;
-    position: relative;
-    height: 100dvh;
+@media (max-width: 600px) {
+  .scene-canvas-wrapper {
+    padding-top: calc(env(safe-area-inset-top, 6px) + 72px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 90px);
   }
 
-  .game-viewport {
-    position: relative;
-    width: 100vw;
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: calc(env(safe-area-inset-top, 6px) + 4px);
-    padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 6px);
-    padding-left: 8px;
-    padding-right: 8px;
-    gap: 6px;
-  }
-
-  /* Compact Top Card in mobile vertical flow */
   .floating-card-top {
-    position: relative;
-    width: 100%;
-    max-width: 410px;
-    background: var(--color-card-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1.5px solid var(--color-border);
-    border-radius: 14px;
+    top: calc(env(safe-area-inset-top, 6px) + 6px);
+    width: calc(100% - 16px);
     padding: 7px 12px 8px 12px;
-    box-shadow: 0 4px 14px rgba(45, 38, 20, 0.12);
-    text-align: center;
-    z-index: 20;
-    flex-shrink: 0;
-    pointer-events: auto;
+    border-radius: 14px;
   }
 
   .brand-title {
@@ -232,55 +182,16 @@ html, body {
   }
 
   .question-text {
-    font-size: 16px !important;
+    font-size: 15px !important;
     line-height: 1.2 !important;
   }
 
-  /* Middle Playable Scene Wrapper: Centers and scales SVG to fit width with margins */
-  .scene-canvas-wrapper {
-    position: relative;
-    flex: 1;
-    width: 100%;
-    min-height: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    pointer-events: auto;
-  }
-
-  .game-svg {
-    display: block;
-    width: 100%;
-    max-width: 390px;
-    max-height: calc(100dvh - 185px);
-    height: auto;
-    aspect-ratio: 390 / 420;
-    object-fit: contain;
-    overflow: hidden;
-    pointer-events: auto;
-  }
-
-  /* Compact Bottom Card in mobile vertical flow */
   .floating-card-bottom {
-    position: relative;
-    width: calc(100% - 56px);
-    margin-left: auto;
-    margin-right: 0;
-    max-width: 360px;
-    background: var(--color-card-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1.5px solid var(--color-border);
-    border-radius: 14px;
+    bottom: calc(env(safe-area-inset-bottom, 8px) + 6px);
+    width: calc(100% - 16px);
     padding: 8px 12px 9px 12px;
-    box-shadow: 0 4px 14px rgba(45, 38, 20, 0.12);
-    display: flex;
-    flex-direction: column;
+    border-radius: 14px;
     gap: 7px;
-    z-index: 20;
-    flex-shrink: 0;
-    pointer-events: auto;
   }
 
   .range-label,
@@ -297,35 +208,9 @@ html, body {
   }
 
   .btn-lock {
-    min-height: 42px !important;
+    min-height: 40px !important;
     font-size: 15px !important;
     border-radius: 12px !important;
-  }
-
-  /* Test button fixed to bottom-left corner away from the cards */
-  .corner-test-panel {
-    position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 8px) + 8px);
-    left: 8px;
-    z-index: 40;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    pointer-events: auto;
-  }
-
-  .corner-toggle-btn {
-    padding: 6px 9px !important;
-    font-size: 11px !important;
-    border-radius: 16px !important;
-  }
-
-  .corner-popup-content {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
-    width: 210px !important;
   }
 }
 
@@ -336,14 +221,15 @@ html, body {
   font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--color-deep);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 2px;
+  opacity: 0.9;
 }
 
 .brand-dot {
@@ -355,243 +241,123 @@ html, body {
 }
 
 .question-meta {
-  font-family: var(--font-heading);
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--color-text-subtle);
-  margin-bottom: 3px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
 .question-text {
   font-family: var(--font-heading);
-  font-size: 19px;
-  font-weight: 600;
-  line-height: 1.22;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--color-deep);
-  margin: 0;
+  line-height: 1.25;
 }
 
-/* Readout Panel inside Bottom Card */
+/* Bottom Card Readout Row */
 .readout-panel {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding-bottom: 1px;
+  align-items: center;
+  gap: 12px;
 }
 
 .range-display {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
 }
 
 .range-label-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
-.range-label {
+.range-label,
+.multiplier-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--color-text-subtle);
-}
-
-.emotion-tag {
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: rgba(61, 74, 46, 0.08);
-  color: var(--color-deep);
-}
-
-.emotion-tag.chill {
-  background: rgba(143, 168, 107, 0.25);
-  color: var(--color-deep);
-}
-
-.emotion-tag.nervous {
-  background: rgba(228, 87, 46, 0.16);
-  color: #B53E17;
-}
-
-.emotion-tag.panic {
-  background: rgba(228, 87, 46, 0.3);
-  color: #9E2602;
-  animation: pulsePanic 1s infinite alternate;
-}
-
-@keyframes pulsePanic {
-  0% { transform: scale(1); }
-  100% { transform: scale(1.05); }
 }
 
 .range-value {
   font-family: var(--font-heading);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--color-deep);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .multiplier-tag {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-}
-
-.multiplier-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-subtle);
+  text-align: right;
 }
 
 .multiplier-badge-text {
   font-family: var(--font-heading);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--color-accent);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Lock it in Button */
 .btn-lock {
-  min-height: 46px;
   width: 100%;
-  border: none;
-  border-radius: 14px;
-  background-color: var(--color-deep);
+  min-height: 44px;
+  background: var(--color-deep);
   color: var(--color-cream);
   font-family: var(--font-heading);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 14px;
   cursor: pointer;
-  touch-action: manipulation;
-  transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 12px rgba(61, 74, 46, 0.22);
+  box-shadow: 0 4px 14px rgba(45, 58, 38, 0.28);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
 }
 
 .btn-lock:hover {
-  background-color: #313c24;
-  box-shadow: 0 6px 16px rgba(61, 74, 46, 0.28);
+  background: #313D24;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(45, 58, 38, 0.35);
 }
 
 .btn-lock:active {
-  transform: scale(0.985);
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(45, 58, 38, 0.22);
 }
 
-/* Corner Test Box (Palettes & Skies) */
-.corner-toggle-btn {
-  background: var(--color-card-bg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
-  padding: 6px 11px;
-  font-family: var(--font-heading);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-deep);
-  cursor: pointer;
-  touch-action: manipulation;
-  box-shadow: 0 4px 12px rgba(45, 38, 20, 0.15);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background-color 0.15s ease;
+.btn-lock:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
 }
-
-.corner-toggle-btn:hover {
-  background: #FFF;
-}
-
-.corner-popup-content {
-  background: var(--color-card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  padding: 10px 12px;
-  box-shadow: 0 8px 24px rgba(45, 38, 20, 0.2);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.corner-popup-content.hidden {
-  display: none;
-}
-
-.test-section-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-subtle);
-  margin-bottom: 2px;
-}
-
-.test-btn-group {
-  display: flex;
-  gap: 4px;
-}
-
-.test-pill-btn {
-  flex: 1;
-  min-height: 30px;
-  padding: 3px 5px;
-  font-family: var(--font-heading);
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: #FFF;
-  color: var(--color-deep);
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.test-pill-btn.active {
-  background-color: var(--color-deep);
-  color: #FFF;
-  border-color: var(--color-deep);
-}
-
-.sky-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.sky-dot.day { background: #5db9e6; }
-.sky-dot.sunset { background: #F8B36A; }
-.sky-dot.night { background: #3B4A7A; }
 
 /* ==========================================================================
-   MILESTONE 2: DRAGGABLE HANDLES & JUMPER EMOTIONS
+   DRAGGABLE STRAP HANDLES & MATTRESS BODY
    ========================================================================== */
-
-/* Draggable Strap Handles */
 .handle-group {
   cursor: ew-resize;
   touch-action: none;
   outline: none;
+  -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -600,137 +366,373 @@ html, body {
   cursor: grabbing;
 }
 
-/* Focus halo on handles for keyboard accessibility */
+.mattress-drag-group {
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mattress-drag-group.dragging {
+  cursor: grabbing;
+}
+
+/* Keyboard Focus Ring */
 .handle-focus-ring {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.handle-group:focus-visible .handle-focus-ring {
+.handle-group:focus-visible .handle-focus-ring,
+.mattress-drag-group:focus-visible .handle-focus-ring {
   opacity: 1;
 }
 
-/* Jumper Emotion Animations */
-/* 1. CHILL (r > 0.40): Slow relaxed walk */
-.emotion-chill .jumper-pacing {
-  animation: jumperBridgePacing 5.4s ease-in-out infinite alternate;
-}
-.emotion-chill .jumper-body-bob {
-  animation: jumperStepBob 0.75s ease-in-out infinite alternate;
-}
-
-/* 2. NERVOUS (0.15 < r <= 0.40): Faster walk */
-.emotion-nervous .jumper-pacing {
-  animation: jumperBridgePacing 2.6s ease-in-out infinite alternate;
-}
-.emotion-nervous .jumper-body-bob {
-  animation: jumperStepBob 0.45s ease-in-out infinite alternate;
-}
-
-/* 3. PANIC (r <= 0.15): Very fast walk + trembling */
-.emotion-panic .jumper-pacing {
-  animation: jumperBridgePacing 1.3s ease-in-out infinite alternate;
-}
-.emotion-panic .jumper-body-bob {
-  animation: jumperStepBob 0.28s ease-in-out infinite alternate;
-}
-.emotion-panic .jumper-tremble-group {
-  animation: jumperPanicTremble 0.08s infinite alternate ease-in-out;
-}
-
-@keyframes jumperPanicTremble {
-  0% { transform: translate(-0.8px, 0.4px); }
-  100% { transform: translate(0.8px, -0.4px); }
-}
-
-/* Floating Milestone 2 Toast Notice */
-.toast-notice {
-  position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 12px) + 72px);
-  left: 50%;
-  transform: translateX(-50%) translateY(12px);
-  background: rgba(45, 38, 20, 0.92);
-  color: #FFF6E5;
-  font-family: var(--font-heading);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 20px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
+/* ==========================================================================
+   JUMPER MOOD STATES & ANIMATIONS
+   Crossfades smoothly between Chill, Nervous, and Panic
+   ========================================================================== */
+.mood-layer {
   opacity: 0;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  z-index: 100;
-  text-align: center;
-  max-width: 90vw;
+  pointer-events: none;
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.toast-notice.show {
+.emotion-chill .mood-layer-chill {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
 }
 
-/* SVG Scene Animations */
-.cloud-drift-1 {
-  animation: cloudFloat1 32s ease-in-out infinite alternate;
-}
-.cloud-drift-2 {
-  animation: cloudFloat2 26s ease-in-out infinite alternate;
+.emotion-nervous .mood-layer-nervous {
+  opacity: 1;
 }
 
-@keyframes cloudFloat1 {
-  0% { transform: translateX(0px); }
-  100% { transform: translateX(18px); }
+.emotion-panic .mood-layer-panic {
+  opacity: 1;
 }
 
-@keyframes cloudFloat2 {
-  0% { transform: translateX(0px); }
-  100% { transform: translateX(-14px); }
+/* Pacing across bridge above mattress */
+.jumper-pacing {
+  animation: jumperPace 4.6s ease-in-out infinite alternate;
+  transform-origin: 0 0;
 }
 
-@keyframes jumperBridgePacing {
+@keyframes jumperPace {
   0% {
-    transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(1);
-  }
-  48% {
-    transform: translateX(var(--jumper-pace-extent, 32px)) scaleX(1);
-  }
-  50% {
-    transform: translateX(var(--jumper-pace-extent, 32px)) scaleX(-1);
-  }
-  98% {
-    transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(-1);
+    transform: translateX(calc(-1 * var(--jumper-pace-extent, 20px)));
   }
   100% {
-    transform: translateX(calc(-1 * var(--jumper-pace-extent, 32px))) scaleX(1);
+    transform: translateX(var(--jumper-pace-extent, 20px));
   }
 }
 
-@keyframes jumperStepBob {
-  0% { transform: translateY(0px); }
+/* Emotion speeds and body movements */
+.emotion-chill .jumper-pacing {
+  animation-duration: 4.8s;
+}
+
+.emotion-nervous .jumper-pacing {
+  animation-duration: 2.8s;
+}
+
+.emotion-panic .jumper-pacing {
+  /* Modest pace so jumper does not blur across narrow mattress */
+  animation-duration: 1.9s;
+}
+
+/* Jumper vertical walking bob */
+.jumper-body-bob {
+  animation: jumperBobChill 0.8s ease-in-out infinite alternate;
+  transform-origin: 0 0;
+}
+
+.emotion-nervous .jumper-body-bob {
+  animation: jumperBobNervous 0.45s ease-in-out infinite alternate;
+}
+
+.emotion-panic .jumper-body-bob {
+  animation: jumperBobPanic 0.32s ease-in-out infinite alternate;
+}
+
+@keyframes jumperBobChill {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-2px); }
+}
+
+@keyframes jumperBobNervous {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-1.5px); }
+}
+
+@keyframes jumperBobPanic {
+  0% { transform: translateY(0); }
   100% { transform: translateY(-1.8px); }
 }
 
-/* Star twinkle */
-.star-twinkle-1 {
-  animation: starTwinkle 2.4s ease-in-out infinite alternate;
-}
-.star-twinkle-2 {
-  animation: starTwinkle 3.2s ease-in-out infinite alternate 1s;
+/* Arms swinging in chill mode */
+.chill-arm-left {
+  animation: chillArmL 1.2s ease-in-out infinite alternate;
+  transform-origin: -6.8px -27.5px;
 }
 
-@keyframes starTwinkle {
+.chill-arm-right {
+  animation: chillArmR 1.2s ease-in-out infinite alternate;
+  transform-origin: 6.8px -27.5px;
+}
+
+@keyframes chillArmL {
+  0% { transform: rotate(-7deg); }
+  100% { transform: rotate(7deg); }
+}
+
+@keyframes chillArmR {
+  0% { transform: rotate(7deg); }
+  100% { transform: rotate(-7deg); }
+}
+
+/* Nervous darting pupils */
+.darting-pupils-group {
+  animation: dartingPupils 2.2s steps(1) infinite;
+}
+
+@keyframes dartingPupils {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1.1px); }
+  50% { transform: translateX(1.1px); }
+  75% { transform: translateX(0); }
+}
+
+/* Nervous sweat drops sliding down */
+.sweat-drop-nervous-1 {
+  animation: nervousSweatSlide 2s ease-in infinite;
+}
+.sweat-drop-nervous-2 {
+  animation: nervousSweatSlide 2s ease-in infinite 0.7s;
+}
+.sweat-drop-nervous-3 {
+  animation: nervousSweatSlide 2s ease-in infinite 1.4s;
+}
+
+@keyframes nervousSweatSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.6);
+  }
+  30% {
+    opacity: 0.9;
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 0.7;
+    transform: translateY(5px) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(9px) scale(0.5);
+  }
+}
+
+/* Panic Whole Body Trembling: 2 to 3 pixels lateral shake */
+.emotion-panic .jumper-tremble-group {
+  animation: panicTremble 0.08s ease-in-out infinite alternate;
+}
+
+@keyframes panicTremble {
+  0% { transform: translateX(-2.5px); }
+  100% { transform: translateX(2.5px); }
+}
+
+/* Panic Sweat drops flying outward */
+.panic-sweat-right {
+  animation: panicSweatR 0.9s ease-out infinite;
+}
+.panic-sweat-left {
+  animation: panicSweatL 0.9s ease-out infinite 0.45s;
+}
+
+@keyframes panicSweatR {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  40% { opacity: 1; transform: translate(3px, -2px) scale(1); }
+  100% { opacity: 0; transform: translate(7px, 3px) scale(0.6); }
+}
+
+@keyframes panicSweatL {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  40% { opacity: 1; transform: translate(-3px, -2px) scale(1); }
+  100% { opacity: 0; transform: translate(-7px, 3px) scale(0.6); }
+}
+
+/* Clouds and Sky features */
+.cloud-drift-1 {
+  animation: cloudDrift1 45s linear infinite;
+}
+.cloud-drift-2 {
+  animation: cloudDrift2 60s linear infinite;
+}
+
+@keyframes cloudDrift1 {
+  0% { transform: translateX(-15px); }
+  100% { transform: translateX(25px); }
+}
+@keyframes cloudDrift2 {
+  0% { transform: translateX(20px); }
+  100% { transform: translateX(-20px); }
+}
+
+.star-twinkle-1 {
+  animation: twinkle 3.2s ease-in-out infinite alternate;
+}
+.star-twinkle-2 {
+  animation: twinkle 2.5s ease-in-out infinite alternate 1.2s;
+}
+
+@keyframes twinkle {
   0% { opacity: 0.35; }
   100% { opacity: 1; }
 }
 
-/* Reduced Motion */
+/* ==========================================================================
+   DEVELOPER PREVIEW & THEME SWITCHER
+   Corner anchored so it never interferes with game
+   ========================================================================== */
+.corner-test-panel {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 8px) + 8px);
+  left: 10px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.corner-toggle-btn {
+  background: var(--color-card-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid var(--color-border);
+  border-radius: 20px;
+  padding: 6px 11px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-deep);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(11, 22, 18, 0.2);
+}
+
+.corner-popup-content {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 210px;
+  background: var(--color-card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid var(--color-border);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 8px 24px rgba(11, 22, 18, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.corner-popup-content.hidden {
+  display: none !important;
+}
+
+.test-section-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-subtle);
+  margin-bottom: 4px;
+}
+
+.test-btn-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.test-pill-btn {
+  background: rgba(61, 74, 46, 0.08);
+  border: 1px solid rgba(61, 74, 46, 0.16);
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-deep);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.test-pill-btn.active {
+  background: var(--color-deep);
+  color: var(--color-cream);
+  border-color: var(--color-deep);
+}
+
+.sky-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.sky-dot.day { background: #87CEEB; }
+.sky-dot.sunset { background: #FF7043; }
+.sky-dot.night { background: #1A237E; }
+
+/* Toast notice */
+.toast-notice {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.92);
+  background: rgba(27, 38, 30, 0.94);
+  color: #FFF6E5;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(255, 246, 229, 0.3);
+  border-radius: 16px;
+  padding: 14px 22px;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  box-shadow: 0 12px 32px rgba(11, 22, 18, 0.45);
+}
+
+.toast-notice.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Reduced Motion Accessibility */
 @media (prefers-reduced-motion: reduce) {
-  .cloud-drift-1,
-  .cloud-drift-2,
   .jumper-pacing,
   .jumper-body-bob,
-  .jumper-tremble-group,
+  .chill-arm-left,
+  .chill-arm-right,
+  .darting-pupils-group,
+  .panic-tremble,
+  .sweat-drop-nervous-1,
+  .sweat-drop-nervous-2,
+  .sweat-drop-nervous-3,
+  .panic-sweat-right,
+  .panic-sweat-left,
+  .cloud-drift-1,
+  .cloud-drift-2,
   .star-twinkle-1,
   .star-twinkle-2 {
     animation: none !important;
