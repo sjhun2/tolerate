@@ -16,10 +16,62 @@ const CONFIG = {
   MULTIPLIER_EXPONENT: 0.6,
   MAX_SCALE_RATIO: 50,
 
-  // Milestone 2 slider constraints
-  STEP_SIZE: 10,       // Arrow key step (10 ft)
-  SHIFT_STEP_SIZE: 100, // Shift + Arrow key step (100 ft)
-  MIN_WIDTH_RATIO: 1 / 50, // Minimum width = scale / 50 (40 ft for 0..2000)
+  // Milestone 2 & 3 slider constraints
+  STEP_SIZE: 10,           // Arrow key step
+  SHIFT_STEP_SIZE: 100,    // Shift + Arrow key step
+  MIN_WIDTH_RATIO: 1 / 50, // Minimum width = scale / 50
+
+  // =========================================================================
+  // TEST DATA: Linear scales only for Milestone 3 (Fake test data)
+  // Three test-only questions with matching skies per slot
+  // =========================================================================
+  TEST_QUESTIONS: {
+    1: {
+      id: 'test_slot_1',
+      slot: 1,
+      text: 'How tall is the Eiffel Tower, in feet?',
+      unit: 'ft',
+      trueAnswer: 1083,
+      scaleMin: 0,
+      scaleMax: 2000,
+      scaleType: 'linear',
+      // Compatibility aliases
+      true_answer: 1083,
+      scale_min: 0,
+      scale_max: 2000,
+      scale_type: 'linear',
+    },
+    2: {
+      id: 'test_slot_2',
+      slot: 2,
+      text: 'How tall is Mount Everest, in feet?',
+      unit: 'ft',
+      trueAnswer: 29032,
+      scaleMin: 0,
+      scaleMax: 40000,
+      scaleType: 'linear',
+      // Compatibility aliases
+      true_answer: 29032,
+      scale_min: 0,
+      scale_max: 40000,
+      scale_type: 'linear',
+    },
+    3: {
+      id: 'test_slot_3',
+      slot: 3,
+      text: 'How long is the Nile River, in miles?',
+      unit: 'mi',
+      trueAnswer: 4132,
+      scaleMin: 1000,
+      scaleMax: 9000,
+      scaleType: 'linear',
+      // Compatibility aliases
+      true_answer: 4132,
+      scale_min: 1000,
+      scale_max: 9000,
+      scale_type: 'linear',
+    },
+  },
 
   // Color palettes specified in spec section 6 & 17
   PALETTES: {
@@ -125,33 +177,32 @@ const CONFIG = {
     },
   },
 
-  // Milestone 3 Question Structure (Item 7)
+  // Initial Question (defaults to Slot 1)
   QUESTION: {
+    id: 'test_slot_1',
+    slot: 1,
     text: 'How tall is the Eiffel Tower, in feet?',
     unit: 'ft',
     trueAnswer: 1083,
     scaleMin: 0,
     scaleMax: 2000,
     scaleType: 'linear',
-    slot: 1,
-    // Aliases for compatibility
+    true_answer: 1083,
     scale_min: 0,
     scale_max: 2000,
-    true_answer: 1083,
     scale_type: 'linear',
   },
 
   // Default Daily Question alias
   DEFAULT_QUESTION: {
-    id: 'eiffel_tower_height',
-    date: '2026-10-15',
+    id: 'test_slot_1',
+    slot: 1,
     text: 'How tall is the Eiffel Tower, in feet?',
     unit: 'ft',
     trueAnswer: 1083,
     scaleMin: 0,
     scaleMax: 2000,
     scaleType: 'linear',
-    slot: 1,
     scale_min: 0,
     scale_max: 2000,
     true_answer: 1083,
@@ -164,7 +215,7 @@ const CONFIG = {
     HEIGHT: 420,
     LEFT_CLIFF_RIGHT: 70,
     RIGHT_CLIFF_LEFT: 320,
-    CANYON_WIDTH: 250, // 320 - 70 = 250
+    CANYON_WIDTH: 250,
     DEFAULT_RATIO: 0.40, // Middle 40% of scale
 
     // Bridge vertical placement
