@@ -18,7 +18,7 @@
     <div class="fullscreen-tint-overlay" aria-hidden="true"></div>
 
     <main class="game-viewport">
-      <!-- Floating Top Card: Brand Title & Question -->
+      <!-- Top Card: Brand Title & Question -->
       <header class="floating-card-top" aria-label="Question Details">
         <div class="brand-title">
           <span>TOLERATE</span>
@@ -29,12 +29,12 @@
         <h1 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h1>
       </header>
 
-      <!-- Central Full-Height Canyon Scene (Edge-to-Edge landscape) -->
+      <!-- Middle Canyon Playable Scene -->
       <div id="scene-svg-wrapper" class="scene-canvas-wrapper" aria-label="Canyon Play Area">
         <!-- SVG rendered dynamically by game.js -->
       </div>
 
-      <!-- Floating Bottom Card: Range Readout, Multiplier, and Lock Button -->
+      <!-- Bottom Card: Range Readout, Multiplier, and Lock Button -->
       <section class="floating-card-bottom" aria-label="Controls and Range Selection">
         <div class="readout-panel">
           <div class="range-display">
@@ -52,12 +52,8 @@
         </button>
       </section>
 
-      <!-- Floating Corner Test Panel: Compact box for testing Skies & Palettes -->
+      <!-- Floating Test Panel: Anchored in Bottom-Left Corner away from cards -->
       <aside class="corner-test-panel" aria-label="Developer Preview Controls">
-        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies and Palettes">
-          <span>⚙️ Skies & Theme</span>
-        </button>
-
         <div id="corner-popup-content" class="corner-popup-content hidden">
           <div>
             <div class="test-section-title">Sky Slots:</div>
@@ -89,6 +85,10 @@
             </div>
           </div>
         </div>
+
+        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies and Palettes">
+          <span>⚙️ Theme</span>
+        </button>
       </aside>
     </main>
 
