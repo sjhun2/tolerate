@@ -1,5 +1,5 @@
 /**
- * Tolerate: The Deep Drop — Game Engine
+ * Tolerate: The Deep Drop — Game Engine (Milestone 2)
  * File: game.js
  * Plain JavaScript (no build tools, no frameworks).
  */
@@ -7,14 +7,19 @@
 (function () {
   'use strict';
 
-  // State with Golden palette default (Spec Update #6)
+  // State with Golden palette default and initial 40% range (600 to 1,400 ft)
   const state = {
     currentSlot: 1, // 1: Day, 2: Sunset, 3: Night
     currentPalette: CONFIG.DEFAULT_PALETTE || 'golden',
     question: CONFIG.DEFAULT_QUESTION,
-    // Middle 40% starting range (30% to 70% of canyon width)
-    rangeRatioMin: 0.30,
-    rangeRatioMax: 0.70,
+
+    // Milestone 2 values in feet (0 to 2,000 ft, rounded to nearest 10)
+    currentLo: 600,
+    currentHi: 1400,
+
+    // Dragging state
+    activeDragHandle: null, // 'left' or 'right'
+    toastTimeout: null,
   };
 
   /**
@@ -25,21 +30,76 @@
   }
 
   /**
-   * Calculate current range values
+   * Calculate current range, multiplier, and emotion
    */
   function calculateRangeValues() {
     const q = state.question;
     const totalScale = q.scale_max - q.scale_min;
-    const lo = q.scale_min + totalScale * state.rangeRatioMin;
-    const hi = q.scale_min + totalScale * state.rangeRatioMax;
-    const width = hi - lo;
-    const multiplier = (totalScale / width).toFixed(1);
+    const lo = Math.round(state.currentLo / 10) * 10;
+    const hi = Math.round(state.currentHi / 10) * 10;
+    const width = Math.max(10, hi - lo);
+
+    // Multiplier = scale / width, capped at 50
+    const rawMultiplier = totalScale / width;
+    const multiplier = Math.min(rawMultiplier, CONFIG.MAX_MULTIPLIER);
+    const multiplierStr = multiplier >= 10 ? multiplier.toFixed(1) : multiplier.toFixed(1);
+
+    // Emotion ratio: r = width / scale
+    const r = width / totalScale;
+    let emotion = 'chill';
+    let emotionLabel = 'Chill';
+
+    if (r > 0.40) {
+      emotion = 'chill';
+      emotionLabel = 'Chill';
+    } else if (r > 0.15) {
+      emotion = 'nervous';
+      emotionLabel = 'Nervous';
+    } else {
+      emotion = 'panic';
+      emotionLabel = 'Panic!';
+    }
+
+    // Ratio in 0..1 coordinates
+    const ratioMin = (lo - q.scale_min) / totalScale;
+    const ratioMax = (hi - q.scale_min) / totalScale;
 
     return {
-      lo: Math.round(lo),
-      hi: Math.round(hi),
-      width: Math.round(width),
-      multiplier: Math.min(parseFloat(multiplier), CONFIG.MAX_MULTIPLIER),
+      lo,
+      hi,
+      width,
+      multiplier: multiplierStr,
+      emotion,
+      emotionLabel,
+      ratioMin,
+      ratioMax,
+      r,
+    };
+  }
+
+  /**
+   * Convert client (screen) coordinates to exact SVG coordinates
+   */
+  function screenToSvgCoords(clientX, clientY) {
+    const svg = document.getElementById('game-canvas');
+    if (!svg) return { x: clientX, y: clientY };
+
+    // Standard DOMPoint / CTM inverse transformation
+    if (svg.getScreenCTM) {
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const ctm = svg.getScreenCTM();
+      if (ctm) {
+        return pt.matrixTransform(ctm.inverse());
+      }
+    }
+
+    // Fallback bounding rect math
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: ((clientX - rect.left) / rect.width) * CONFIG.CANVAS.WIDTH,
+      y: ((clientY - rect.top) / rect.height) * CONFIG.CANVAS.HEIGHT,
     };
   }
 
@@ -97,6 +157,46 @@
   }
 
   /**
+   * Update range by feet with constraint enforcement
+   */
+  function setHandleValue(handle, targetValue) {
+    const q = state.question;
+    const minWidth = Math.round((q.scale_max - q.scale_min) * CONFIG.MIN_WIDTH_RATIO); // 40 ft
+
+    // Round target value to nearest 10
+    const rounded = Math.round(targetValue / 10) * 10;
+
+    if (handle === 'left') {
+      const maxAllowed = state.currentHi - minWidth;
+      state.currentLo = Math.max(q.scale_min, Math.min(rounded, maxAllowed));
+    } else if (handle === 'right') {
+      const minAllowed = state.currentLo + minWidth;
+      state.currentHi = Math.min(q.scale_max, Math.max(rounded, minAllowed));
+    }
+
+    renderScene();
+  }
+
+  /**
+   * Handle dragging movement from pointer coordinates
+   */
+  function updateFromPointer(clientX) {
+    if (!state.activeDragHandle) return;
+
+    const svgCoords = screenToSvgCoords(clientX, 0);
+    const canyonLeft = CONFIG.CANVAS.LEFT_CLIFF_RIGHT; // 70
+    const canyonWidth = CONFIG.CANVAS.CANYON_WIDTH; // 250
+    const q = state.question;
+    const totalScale = q.scale_max - q.scale_min;
+
+    // Compute raw value along number line
+    const ratio = (svgCoords.x - canyonLeft) / canyonWidth;
+    const targetValue = q.scale_min + ratio * totalScale;
+
+    setHandleValue(state.activeDragHandle, targetValue);
+  }
+
+  /**
    * Generate Pine Tree SVG
    */
   function drawPineTree(x, baseY, scale = 1, fill = '#3D4A2E') {
@@ -115,7 +215,31 @@
   }
 
   /**
-   * Render the complete 390x420 SVG scene with full-width extended landscape and fabric straps
+   * Show friendly Milestone 2 Toast Notice
+   */
+  function showToast(message) {
+    let toast = document.getElementById('milestone-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'milestone-toast';
+      toast.className = 'toast-notice';
+      document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.classList.add('show');
+
+    if (state.toastTimeout) {
+      clearTimeout(state.toastTimeout);
+    }
+
+    state.toastTimeout = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3200);
+  }
+
+  /**
+   * Render the complete 390x420 SVG scene with live draggable handles
    */
   function renderScene() {
     const container = document.getElementById('scene-svg-wrapper');
@@ -130,10 +254,10 @@
     const canyonRight = CONFIG.CANVAS.RIGHT_CLIFF_LEFT; // 320
     const canyonWidth = CONFIG.CANVAS.CANYON_WIDTH; // 250
 
-    // Range in SVG coordinates (middle 40% = x: 145 to 245)
-    const matLeft = canyonLeft + canyonWidth * state.rangeRatioMin;
-    const matRight = canyonLeft + canyonWidth * state.rangeRatioMax;
-    const matWidth = matRight - matLeft;
+    // Range in SVG coordinates (mapped dynamically as user drags)
+    const matLeft = canyonLeft + canyonWidth * rangeData.ratioMin;
+    const matRight = canyonLeft + canyonWidth * rangeData.ratioMax;
+    const matWidth = Math.max(10, matRight - matLeft);
     const matCenter = matLeft + matWidth / 2;
 
     // Bridge coordinates
@@ -145,8 +269,8 @@
     const mattressHeight = CONFIG.CANVAS.MATTRESS_HEIGHT || 29;
     const strapWidth = CONFIG.CANVAS.STRAP_WIDTH || 9;
 
-    // Calculate jumper pacing extent (strictly above the mattress span)
-    const jumperPaceExtent = Math.max(12, (matWidth / 2) - 18);
+    // Jumper pacing extent: spans strictly over the mattress area
+    const jumperPaceExtent = Math.max(4, (matWidth / 2) - 15);
 
     // Left and right strap center X coordinates (wrapping ends of mattress)
     const strapLeftCenterX = matLeft + 2;
@@ -263,7 +387,7 @@
       <ellipse cx="180" cy="416" rx="150" ry="24" fill="#FFFFFF" opacity="0.95" />
     `;
 
-    // 3. Extended Left and Right Cliffs (Edge-to-Edge on wide screens)
+    // 3. Extended Left and Right Cliffs
     const leftCliff = `
       <path d="M -1500 100 Q -1000 95 -600 102 Q -200 100 55 124 L 70 146 L 70 430 L -1500 430 Z" fill="${pal.hills}" />
       <path d="M 55 124 L 70 146 L 70 430 L 64 430 L 64 150 L 50 128 Z" fill="${pal.hillsDark}" opacity="0.65" />
@@ -282,30 +406,26 @@
       <path d="M 1900 98 Q 1000 100 335 122 L 320 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
-    // 4. Pine Trees (Canyon framing + wide desktop wings)
+    // 4. Pine Trees
     const pineTrees = `
-      <!-- Left Extended Plateau Trees -->
       ${drawPineTree(-540, 102, 0.75, pal.deepGreen)}
       ${drawPineTree(-380, 104, 0.95, pal.deepGreen)}
       ${drawPineTree(-240, 106, 0.85, pal.deepGreen)}
       ${drawPineTree(-120, 110, 1.05, pal.deepGreen)}
       ${drawPineTree(-40, 116, 0.8, pal.deepGreen)}
 
-      <!-- Left Canyon Rim Trees -->
       ${drawPineTree(16, 114, 0.65, pal.deepGreen)}
       ${drawPineTree(36, 122, 0.75, pal.deepGreen)}
       ${drawPineTree(18, 146, 0.95, pal.deepGreen)}
       ${drawPineTree(44, 150, 1.1, pal.deepGreen)}
       ${drawPineTree(28, 172, 1.0, pal.deepGreen)}
 
-      <!-- Right Canyon Rim Trees -->
       ${drawPineTree(374, 110, 0.65, pal.deepGreen)}
       ${drawPineTree(352, 120, 0.75, pal.deepGreen)}
       ${drawPineTree(372, 146, 0.95, pal.deepGreen)}
       ${drawPineTree(344, 150, 1.1, pal.deepGreen)}
       ${drawPineTree(360, 172, 1.0, pal.deepGreen)}
 
-      <!-- Right Extended Plateau Trees -->
       ${drawPineTree(430, 116, 0.8, pal.deepGreen)}
       ${drawPineTree(510, 110, 1.05, pal.deepGreen)}
       ${drawPineTree(640, 106, 0.85, pal.deepGreen)}
@@ -404,53 +524,77 @@
       </g>
     `;
 
-    // 7. Human Jumper (on bridge, 30% bigger, pacing only over mattress span)
+    // 7. Human Jumper with Emotion States (Chill, Nervous, Panic)
+    let emotionSweatDrops = '';
+    let jumperMouth = `<path d="M -2.5 -30.5 Q 0 -29 2.5 -30.5" stroke="#9E4D1D" stroke-width="0.8" fill="none" />`;
+
+    if (rangeData.emotion === 'nervous') {
+      emotionSweatDrops = `
+        <g opacity="0.85">
+          <path d="M 8 -36 C 9 -37, 10 -35, 9.5 -34 C 9 -33, 7.5 -33.5, 8 -36 Z" fill="#4FB3D9" />
+        </g>
+      `;
+      jumperMouth = `<path d="M -3 -30 Q 0 -31.5 3 -30" stroke="#9E4D1D" stroke-width="0.9" fill="none" />`;
+    } else if (rangeData.emotion === 'panic') {
+      emotionSweatDrops = `
+        <g opacity="0.95">
+          <path d="M 8.5 -37 C 10 -38.5, 11.5 -36, 10.5 -34.5 C 9.5 -33, 8 -34, 8.5 -37 Z" fill="#3AA8D6" />
+          <path d="M -8.5 -36 C -10 -37.5, -11 -35, -10 -34 C -9 -33, -8 -33.5, -8.5 -36 Z" fill="#3AA8D6" />
+        </g>
+      `;
+      jumperMouth = `<ellipse cx="0" cy="-30" rx="2.2" ry="2.6" fill="#8B2500" stroke="#3D1808" stroke-width="0.6" />`;
+    }
+
     const jumper = `
-      <g id="jumper-container" transform="translate(${matCenter}, ${bridgeY})" style="--jumper-pace-extent: ${jumperPaceExtent}px;">
+      <g id="jumper-container" class="emotion-${rangeData.emotion}" transform="translate(${matCenter}, ${bridgeY})" style="--jumper-pace-extent: ${jumperPaceExtent}px;">
         <g class="jumper-pacing">
           <g transform="scale(1.30)">
-            <g class="jumper-body-bob">
-              <ellipse cx="0" cy="0" rx="7.5" ry="2.2" fill="#2E1B0B" opacity="0.5" />
+            <g class="jumper-tremble-group">
+              <g class="jumper-body-bob">
+                <ellipse cx="0" cy="0" rx="7.5" ry="2.2" fill="#2E1B0B" opacity="0.5" />
 
-              <rect x="-6" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
-              <rect x="1.8" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
-              <line x1="-6" y1="-1" x2="-1.8" y2="-1" stroke="#3D3025" stroke-width="1" />
-              <line x1="1.8" y1="-1" x2="6" y2="-1" stroke="#3D3025" stroke-width="1" />
+                <rect x="-6" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
+                <rect x="1.8" y="-5" width="4.2" height="5" rx="1.5" fill="#1C1815" />
+                <line x1="-6" y1="-1" x2="-1.8" y2="-1" stroke="#3D3025" stroke-width="1" />
+                <line x1="1.8" y1="-1" x2="6" y2="-1" stroke="#3D3025" stroke-width="1" />
 
-              <path d="M -5.5 -15 L -1.8 -15 L -1.8 -5 L -5.5 -5 Z" fill="#243038" />
-              <path d="M 1.8 -15 L 5.5 -15 L 5.5 -5 L 1.8 -5 Z" fill="#243038" />
-              <rect x="-6.5" y="-17.5" width="13" height="2.6" fill="#161E22" rx="0.5" />
-              <rect x="-1.5" y="-17.5" width="3" height="2.6" fill="#D9822B" rx="0.5" />
+                <path d="M -5.5 -15 L -1.8 -15 L -1.8 -5 L -5.5 -5 Z" fill="#243038" />
+                <path d="M 1.8 -15 L 5.5 -15 L 5.5 -5 L 1.8 -5 Z" fill="#243038" />
+                <rect x="-6.5" y="-17.5" width="13" height="2.6" fill="#161E22" rx="0.5" />
+                <rect x="-1.5" y="-17.5" width="3" height="2.6" fill="#D9822B" rx="0.5" />
 
-              <path d="M -6.8 -28.5 L 6.8 -28.5 L 5.5 -17.5 L -5.5 -17.5 Z" fill="${pal.accentOrange}" />
-              <line x1="0" y1="-28.5" x2="0" y2="-17.5" stroke="#9E3011" stroke-width="1.1" />
-              <path d="M -2.5 -28.5 L 0 -25.5 L 2.5 -28.5" stroke="#FFE4D6" stroke-width="0.8" fill="none" />
+                <path d="M -6.8 -28.5 L 6.8 -28.5 L 5.5 -17.5 L -5.5 -17.5 Z" fill="${pal.accentOrange}" />
+                <line x1="0" y1="-28.5" x2="0" y2="-17.5" stroke="#9E3011" stroke-width="1.1" />
+                <path d="M -2.5 -28.5 L 0 -25.5 L 2.5 -28.5" stroke="#FFE4D6" stroke-width="0.8" fill="none" />
 
-              <path d="M -6.8 -27.5 Q -9.5 -21 -7.5 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-              <path d="M 6.8 -27.5 Q 9.5 -21 7.5 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-              <circle cx="-7.5" cy="-15" r="1.6" fill="#FAD1A7" />
-              <circle cx="7.5" cy="-15" r="1.6" fill="#FAD1A7" />
+                <path d="M -6.8 -27.5 Q -9.5 -21 -7.5 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                <path d="M 6.8 -27.5 Q 9.5 -21 7.5 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                <circle cx="-7.5" cy="-15" r="1.6" fill="#FAD1A7" />
+                <circle cx="7.5" cy="-15" r="1.6" fill="#FAD1A7" />
 
-              <rect x="-2" y="-30.5" width="4" height="3" fill="#FAD1A7" />
+                <rect x="-2" y="-30.5" width="4" height="3" fill="#FAD1A7" />
 
-              <ellipse cx="0" cy="-33.5" rx="6.8" ry="5.8" fill="#FFFFFF" stroke="#CCD5DC" stroke-width="0.8" />
-              <path d="M -6.8 -33.5 Q 0 -38.8 6.8 -33.5" fill="#FFFFFF" />
-              <path d="M -6.2 -32.5 Q 0 -31.5 6.2 -32.5" stroke="#B8C4CC" stroke-width="1.2" fill="none" />
+                <ellipse cx="0" cy="-33.5" rx="6.8" ry="5.8" fill="#FFFFFF" stroke="#CCD5DC" stroke-width="0.8" />
+                <path d="M -6.8 -33.5 Q 0 -38.8 6.8 -33.5" fill="#FFFFFF" />
+                <path d="M -6.2 -32.5 Q 0 -31.5 6.2 -32.5" stroke="#B8C4CC" stroke-width="1.2" fill="none" />
 
-              <rect x="-6.5" y="-34.2" width="13" height="2.4" rx="0.8" fill="#1C272E" />
-              <rect x="-4.8" y="-35.2" width="4.2" height="3.6" rx="1.2" fill="#3B92B8" stroke="#1C272E" stroke-width="0.7" />
-              <rect x="0.6" y="-35.2" width="4.2" height="3.6" rx="1.2" fill="#3B92B8" stroke="#1C272E" stroke-width="0.7" />
-              <line x1="-3.8" y1="-34.5" x2="-1.8" y2="-32.8" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
-              <line x1="1.6" y1="-34.5" x2="3.6" y2="-32.8" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
+                <rect x="-6.5" y="-34.2" width="13" height="2.4" rx="0.8" fill="#1C272E" />
+                <rect x="-4.8" y="-35.2" width="4.2" height="3.6" rx="1.2" fill="#3B92B8" stroke="#1C272E" stroke-width="0.7" />
+                <rect x="0.6" y="-35.2" width="4.2" height="3.6" rx="1.2" fill="#3B92B8" stroke="#1C272E" stroke-width="0.7" />
+                <line x1="-3.8" y1="-34.5" x2="-1.8" y2="-32.8" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
+                <line x1="1.6" y1="-34.5" x2="3.6" y2="-32.8" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" />
 
-              <path d="M -3.5 -31.5 Q 0 -29 3.5 -31.5 Z" fill="#FAD1A7" />
+                <path d="M -3.5 -31.5 Q 0 -29 3.5 -31.5 Z" fill="#FAD1A7" />
+                ${jumperMouth}
+                ${emotionSweatDrops}
+              </g>
             </g>
           </g>
         </g>
       </g>
     `;
 
-    // 8. 20% Thicker White Rescue Mattress with Fabric Straps & Buckles
+    // 8. 20% Thicker White Rescue Mattress with Live Draggable Straps
     const buttonSpacing = matWidth / 6;
     let mattressTufts = '';
     for (let b = 1; b <= 5; b++) {
@@ -466,7 +610,6 @@
       <g stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round">
         <line x1="${canyonLeft}" y1="210" x2="${strapLeftCenterX}" y2="${buckleLeftY}" />
         <line x1="${canyonRight}" y1="210" x2="${strapRightCenterX}" y2="${buckleRightY}" />
-        <!-- Lower stabilizer cables -->
         <line x1="${canyonLeft}" y1="340" x2="${strapLeftCenterX}" y2="${mattressY + mattressHeight}" opacity="0.6" stroke-dasharray="3,3" />
         <line x1="${canyonRight}" y1="340" x2="${strapRightCenterX}" y2="${mattressY + mattressHeight}" opacity="0.6" stroke-dasharray="3,3" />
       </g>
@@ -474,15 +617,28 @@
       <circle cx="${canyonRight}" cy="210" r="3.5" fill="#3D4A47" />
     `;
 
-    // Vertical Fabric Straps with Buckles
+    // Vertical Fabric Straps with Buckles as DRAGGABLE HANDLES (Milestone 2)
     const strapTopY = mattressY - 4;
     const strapBottomY = mattressY + mattressHeight + 3;
     const strapH = strapBottomY - strapTopY;
 
     const straps = `
-      <!-- Left Vertical Fabric Strap & Metal Buckle -->
-      <g id="handle-left">
-        <!-- 44px Invisible Touch Area for Thumb Grabbing -->
+      <!-- Left Draggable Strap Handle (aria-role slider) -->
+      <g
+        id="handle-left"
+        class="handle-group ${state.activeDragHandle === 'left' ? 'dragging' : ''}"
+        tabindex="0"
+        role="slider"
+        aria-label="Lower range boundary handle"
+        aria-valuemin="${state.question.scale_min}"
+        aria-valuemax="${state.currentHi - Math.round((state.question.scale_max - state.question.scale_min) * CONFIG.MIN_WIDTH_RATIO)}"
+        aria-valuenow="${rangeData.lo}"
+        aria-valuetext="${formatNum(rangeData.lo)} ${state.question.unit}"
+      >
+        <!-- Keyboard Focus Ring Halo -->
+        <circle class="handle-focus-ring" cx="${strapLeftCenterX}" cy="${mattressY + 14}" r="25" fill="none" stroke="${pal.deepGreen}" stroke-width="2.5" stroke-dasharray="4,3" />
+
+        <!-- 44px Invisible Touch Hitbox for Thumb Grabbing -->
         <circle cx="${strapLeftCenterX}" cy="${mattressY + 14}" r="22" fill="transparent" pointer-events="all" />
 
         <!-- Metal Buckle / Ring at top of strap -->
@@ -500,9 +656,22 @@
         <line x1="${strapLeftCenterX - (strapWidth / 2) + 1}" y1="${strapBottomY - 2}" x2="${strapLeftCenterX + (strapWidth / 2) - 1}" y2="${strapBottomY - 2}" stroke="#7A1D03" stroke-width="0.8" />
       </g>
 
-      <!-- Right Vertical Fabric Strap & Metal Buckle -->
-      <g id="handle-right">
-        <!-- 44px Invisible Touch Area for Thumb Grabbing -->
+      <!-- Right Draggable Strap Handle (aria-role slider) -->
+      <g
+        id="handle-right"
+        class="handle-group ${state.activeDragHandle === 'right' ? 'dragging' : ''}"
+        tabindex="0"
+        role="slider"
+        aria-label="Upper range boundary handle"
+        aria-valuemin="${state.currentLo + Math.round((state.question.scale_max - state.question.scale_min) * CONFIG.MIN_WIDTH_RATIO)}"
+        aria-valuemax="${state.question.scale_max}"
+        aria-valuenow="${rangeData.hi}"
+        aria-valuetext="${formatNum(rangeData.hi)} ${state.question.unit}"
+      >
+        <!-- Keyboard Focus Ring Halo -->
+        <circle class="handle-focus-ring" cx="${strapRightCenterX}" cy="${mattressY + 14}" r="25" fill="none" stroke="${pal.deepGreen}" stroke-width="2.5" stroke-dasharray="4,3" />
+
+        <!-- 44px Invisible Touch Hitbox for Thumb Grabbing -->
         <circle cx="${strapRightCenterX}" cy="${mattressY + 14}" r="22" fill="transparent" pointer-events="all" />
 
         <!-- Metal Buckle / Ring at top of strap -->
@@ -521,29 +690,22 @@
       </g>
     `;
 
-    // Mattress Body (20% thicker, plush pillow top with box spring base)
+    // Mattress Body
     const mattress = `
       <g id="mattress-assembly" filter="url(#softShadow)">
-        <!-- Thin Box-Spring Base underneath -->
         <rect x="${matLeft}" y="${mattressY + mattressHeight - 5}" width="${matWidth}" height="5" rx="1.5" fill="url(#boxSpringGrad)" stroke="#9CA7AF" stroke-width="0.8" />
-
-        <!-- Thick White Mattress Body (20% thicker) -->
         <rect x="${matLeft}" y="${mattressY}" width="${matWidth}" height="${mattressHeight - 4}" rx="6" fill="url(#mattressThickGrad)" stroke="${pal.mattressOutline}" stroke-width="1.6" />
 
-        <!-- Quilted Pillow-Top Piping / Stitch Lines -->
         <path d="M ${matLeft + 4} ${mattressY + 6} Q ${matCenter} ${mattressY + 8} ${matRight - 4} ${mattressY + 6}" stroke="#D7DEE3" stroke-width="1.4" fill="none" />
         <path d="M ${matLeft + 4} ${mattressY + 13} Q ${matCenter} ${mattressY + 14.5} ${matRight - 4} ${mattressY + 13}" stroke="#E6ECF0" stroke-width="1.2" stroke-dasharray="3,2.5" fill="none" />
         <path d="M ${matLeft + 4} ${mattressY + 19} Q ${matCenter} ${mattressY + 20.5} ${matRight - 4} ${mattressY + 19}" stroke="#D1D9DF" stroke-width="1.4" fill="none" />
 
-        <!-- Tufted Buttons -->
         ${mattressTufts}
-
-        <!-- Vertical Fabric Straps with Buckles wrapping both ends -->
         ${straps}
       </g>
     `;
 
-    // 9. Multiplier floating above mattress
+    // 9. Multiplier floating above mattress (Updates live as range shrinks/widens)
     const multiplierDisplay = `
       <g transform="translate(${matCenter}, ${mattressY - 16})">
         <rect x="-24" y="-12" width="48" height="22" rx="11" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
@@ -583,8 +745,105 @@
 
     container.innerHTML = svgContent;
 
+    // Attach pointer and keyboard event listeners to the straps
+    bindHandleEvents();
+
     // Update textual readouts outside SVG
     updateReadouts(rangeData);
+  }
+
+  /**
+   * Bind Pointer and Keyboard Drag Events to Handle Straps
+   */
+  function bindHandleEvents() {
+    const handleLeft = document.getElementById('handle-left');
+    const handleRight = document.getElementById('handle-right');
+
+    [
+      { el: handleLeft, handle: 'left' },
+      { el: handleRight, handle: 'right' },
+    ].forEach(({ el, handle }) => {
+      if (!el) return;
+
+      // Pointer down starts drag
+      el.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        state.activeDragHandle = handle;
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch (_) {
+          // ignore fallback
+        }
+        el.classList.add('dragging');
+      });
+
+      // Pointer move updates dragging
+      el.addEventListener('pointermove', e => {
+        if (state.activeDragHandle === handle) {
+          e.preventDefault();
+          updateFromPointer(e.clientX);
+        }
+      });
+
+      // Pointer up ends drag
+      const stopDrag = e => {
+        if (state.activeDragHandle === handle) {
+          try {
+            el.releasePointerCapture(e.pointerId);
+          } catch (_) {
+            // ignore
+          }
+          el.classList.remove('dragging');
+          state.activeDragHandle = null;
+        }
+      };
+
+      el.addEventListener('pointerup', stopDrag);
+      el.addEventListener('pointercancel', stopDrag);
+
+      // Keyboard support: Arrow keys move by 10 ft, Shift+Arrow moves by 100 ft
+      el.addEventListener('keydown', e => {
+        const step = e.shiftKey ? CONFIG.SHIFT_STEP_SIZE : CONFIG.STEP_SIZE;
+        let handled = false;
+
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+          const currentVal = handle === 'left' ? state.currentLo : state.currentHi;
+          setHandleValue(handle, currentVal - step);
+          handled = true;
+        } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+          const currentVal = handle === 'left' ? state.currentLo : state.currentHi;
+          setHandleValue(handle, currentVal + step);
+          handled = true;
+        } else if (e.key === 'Home') {
+          const q = state.question;
+          const minWidth = Math.round((q.scale_max - q.scale_min) * CONFIG.MIN_WIDTH_RATIO);
+          if (handle === 'left') {
+            setHandleValue('left', q.scale_min);
+          } else {
+            setHandleValue('right', state.currentLo + minWidth);
+          }
+          handled = true;
+        } else if (e.key === 'End') {
+          const q = state.question;
+          const minWidth = Math.round((q.scale_max - q.scale_min) * CONFIG.MIN_WIDTH_RATIO);
+          if (handle === 'left') {
+            setHandleValue('left', state.currentHi - minWidth);
+          } else {
+            setHandleValue('right', q.scale_max);
+          }
+          handled = true;
+        }
+
+        if (handled) {
+          e.preventDefault();
+          // Keep keyboard focus on handle
+          const updatedEl = document.getElementById(`handle-${handle}`);
+          if (updatedEl) updatedEl.focus();
+        }
+      });
+    });
   }
 
   /**
@@ -594,6 +853,7 @@
     const rangeValEl = document.getElementById('range-value-display');
     const multiplierValEl = document.getElementById('multiplier-value-display');
     const questionTextEl = document.getElementById('question-text-display');
+    const emotionBadgeEl = document.getElementById('emotion-badge-display');
 
     if (rangeValEl) {
       rangeValEl.textContent = `${formatNum(rangeData.lo)} – ${formatNum(rangeData.hi)} ${state.question.unit}`;
@@ -604,12 +864,43 @@
     if (questionTextEl) {
       questionTextEl.textContent = state.question.question;
     }
+    if (emotionBadgeEl) {
+      emotionBadgeEl.textContent = rangeData.emotionLabel;
+      emotionBadgeEl.className = `emotion-tag ${rangeData.emotion}`;
+    }
+  }
+
+  /**
+   * Global pointer listener to support smooth window dragging
+   */
+  function initWindowDragListeners() {
+    window.addEventListener('pointermove', e => {
+      if (state.activeDragHandle) {
+        updateFromPointer(e.clientX);
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (state.activeDragHandle) {
+        state.activeDragHandle = null;
+        document.querySelectorAll('.handle-group').forEach(h => h.classList.remove('dragging'));
+      }
+    });
+
+    window.addEventListener('pointercancel', () => {
+      if (state.activeDragHandle) {
+        state.activeDragHandle = null;
+        document.querySelectorAll('.handle-group').forEach(h => h.classList.remove('dragging'));
+      }
+    });
   }
 
   /**
    * Attach UI event handlers
    */
   function initEvents() {
+    initWindowDragListeners();
+
     // Corner test panel toggle button
     const cornerToggleBtn = document.getElementById('corner-test-toggle');
     const cornerPopup = document.getElementById('corner-popup-content');
@@ -643,13 +934,12 @@
       });
     });
 
-    // Lock button feedback for preview
+    // "Lock it in" button in Milestone 2 shows progress message
     const lockBtn = document.getElementById('btn-lock-in');
     if (lockBtn) {
       lockBtn.addEventListener('click', () => {
         const data = calculateRangeValues();
-        const msg = `Range locked at: ${formatNum(data.lo)} – ${formatNum(data.hi)} ${state.question.unit} (${data.multiplier}x multiplier).`;
-        console.log(msg);
+        showToast(`Range set to ${formatNum(data.lo)} – ${formatNum(data.hi)} ft (${data.multiplier}x). Reveal drop is coming in Milestone 3!`);
       });
     }
   }
@@ -673,7 +963,8 @@
   window.TolerateGame = {
     setSlot,
     applyPalette,
-    getState: () => ({ ...state }),
+    setHandleValue,
+    getState: () => ({ ...state, ...calculateRangeValues() }),
     renderScene,
   };
 })();
