@@ -38,7 +38,10 @@
       <section class="floating-card-bottom" aria-label="Controls and Range Selection">
         <div class="readout-panel">
           <div class="range-display">
-            <span class="range-label">Chosen Range</span>
+            <div class="range-label-row">
+              <span class="range-label">Chosen Range</span>
+              <span id="emotion-badge-display" class="emotion-tag chill">Chill</span>
+            </div>
             <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
           </div>
           <div class="multiplier-tag">
@@ -47,7 +50,7 @@
           </div>
         </div>
 
-        <button id="btn-lock-in" type="button" class="btn-lock">
+        <button id="btn-lock-in" type="button" class="btn-lock" aria-label="Lock in your chosen range">
           Lock it in
         </button>
       </section>
