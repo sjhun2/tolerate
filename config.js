@@ -11,6 +11,11 @@ const CONFIG = {
   MAX_MULTIPLIER: 50,
   DEFAULT_PALETTE: 'golden', // Golden default
 
+  // Milestone 2 slider constraints
+  STEP_SIZE: 10,       // Arrow key step (10 ft)
+  SHIFT_STEP_SIZE: 100, // Shift + Arrow key step (100 ft)
+  MIN_WIDTH_RATIO: 1 / 50, // Minimum width = scale / 50 (40 ft for 0..2000)
+
   // Color palettes specified in spec section 6
   PALETTES: {
     golden: {
