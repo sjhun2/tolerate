@@ -1,14 +1,14 @@
 /* ==========================================================================
    Tolerate: The Deep Drop — Styles
    File: style.css
-   Full-screen edge-to-edge landscape with floating cream control cards.
+   Full-screen edge-to-edge landscape with responsive phone-first vertical stack.
    ========================================================================== */
 
 /* Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap');
 
 :root {
-  /* Default Golden Palette (Spec Update #6) */
+  /* Default Golden Palette */
   --color-hills: #8FA86B;
   --color-deep: #3D4A2E;
   --color-cream: #FFF6E5;
@@ -42,12 +42,9 @@
 
 html, body {
   width: 100vw;
-  height: 100dvh;
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  position: fixed;
-  inset: 0;
   font-family: var(--font-body);
   background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
   color: var(--color-deep);
@@ -68,62 +65,275 @@ html, body {
   z-index: 10;
 }
 
-/* Stage / Viewport Container: Fills 100dvh Edge to Edge */
-.game-viewport {
-  position: relative;
-  width: 100vw;
-  height: 100dvh;
-  overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* ==========================================================================
+   DESKTOP / LAPTOP / IPAD LAYOUT (Screen width > 700px)
+   Keeps edge-to-edge wide scenery with floating cards
+   ========================================================================== */
+@media (min-width: 701px) {
+  html, body {
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+  }
+
+  .game-viewport {
+    position: relative;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .scene-canvas-wrapper {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    touch-action: none;
+  }
+
+  .game-svg {
+    display: block;
+    height: 100%;
+    width: auto;
+    max-height: 100dvh;
+    aspect-ratio: 390 / 420;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  .floating-card-top {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 8px) + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 20px);
+    max-width: 440px;
+    background: var(--color-card-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid var(--color-border);
+    border-radius: 18px;
+    padding: 10px 16px 11px 16px;
+    box-shadow: 0 8px 24px rgba(45, 38, 20, 0.14);
+    text-align: center;
+    z-index: 20;
+    pointer-events: auto;
+  }
+
+  .floating-card-bottom {
+    position: absolute;
+    bottom: calc(env(safe-area-inset-bottom, 10px) + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 20px);
+    max-width: 440px;
+    background: var(--color-card-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid var(--color-border);
+    border-radius: 18px;
+    padding: 11px 16px 13px 16px;
+    box-shadow: 0 8px 24px rgba(45, 38, 20, 0.14);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 20;
+    pointer-events: auto;
+  }
+
+  .corner-test-panel {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 10px) + 12px);
+    left: 16px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    pointer-events: auto;
+  }
+
+  .corner-popup-content {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 220px;
+  }
 }
 
-/* Central SVG Scene Wrapper: Scales to fit 100dvh while allowing cliff extensions */
-.scene-canvas-wrapper {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  pointer-events: none;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
+/* ==========================================================================
+   MOBILE PHONE LAYOUT (Screen width <= 700px, e.g. iPhone portrait ~390px)
+   Vertical reserved layout: Top Card -> Scaled Canyon Scene -> Bottom Card
+   Guarantees zero overlap, zero zooming/cropping of the playable elements!
+   ========================================================================== */
+@media (max-width: 700px) {
+  html, body {
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    height: 100dvh;
+  }
+
+  .game-viewport {
+    position: relative;
+    width: 100vw;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: calc(env(safe-area-inset-top, 6px) + 4px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 6px);
+    padding-left: 8px;
+    padding-right: 8px;
+    gap: 6px;
+  }
+
+  /* Compact Top Card in mobile vertical flow */
+  .floating-card-top {
+    position: relative;
+    width: 100%;
+    max-width: 410px;
+    background: var(--color-card-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid var(--color-border);
+    border-radius: 14px;
+    padding: 7px 12px 8px 12px;
+    box-shadow: 0 4px 14px rgba(45, 38, 20, 0.12);
+    text-align: center;
+    z-index: 20;
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+
+  .brand-title {
+    font-size: 11px !important;
+    letter-spacing: 0.12em !important;
+    margin-bottom: 1px !important;
+  }
+
+  .brand-dot {
+    width: 4px !important;
+    height: 4px !important;
+  }
+
+  .question-meta {
+    font-size: 10px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .question-text {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Middle Playable Scene Wrapper: Centers and scales SVG to fit width with margins */
+  .scene-canvas-wrapper {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  .game-svg {
+    display: block;
+    width: 100%;
+    max-width: 390px;
+    /* Scale down proportionally if vertical space is limited */
+    max-height: calc(100dvh - 185px);
+    height: auto;
+    aspect-ratio: 390 / 420;
+    object-fit: contain;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  /* Compact Bottom Card in mobile vertical flow */
+  .floating-card-bottom {
+    position: relative;
+    /* Leave room on the left for the floating test button */
+    width: calc(100% - 56px);
+    margin-left: auto;
+    margin-right: 0;
+    max-width: 360px;
+    background: var(--color-card-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid var(--color-border);
+    border-radius: 14px;
+    padding: 8px 12px 9px 12px;
+    box-shadow: 0 4px 14px rgba(45, 38, 20, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    z-index: 20;
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+
+  .range-label,
+  .multiplier-label {
+    font-size: 10px !important;
+  }
+
+  .range-value {
+    font-size: 15px !important;
+  }
+
+  .multiplier-badge-text {
+    font-size: 17px !important;
+  }
+
+  .btn-lock {
+    min-height: 42px !important;
+    font-size: 15px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Test button fixed to bottom-left corner away from the cards */
+  .corner-test-panel {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 8px) + 8px);
+    left: 8px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    pointer-events: auto;
+  }
+
+  .corner-toggle-btn {
+    padding: 6px 9px !important;
+    font-size: 11px !important;
+    border-radius: 16px !important;
+  }
+
+  .corner-popup-content {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 210px !important;
+  }
 }
 
-.game-svg {
-  display: block;
-  height: 100%;
-  width: auto;
-  max-height: 100dvh;
-  aspect-ratio: 390 / 420;
-  overflow: visible;
-  pointer-events: auto;
-}
-
-/* Floating Top Card (Title + Question) */
-.floating-card-top {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 8px) + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 20px);
-  max-width: 440px;
-  background: var(--color-card-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1.5px solid var(--color-border);
-  border-radius: 18px;
-  padding: 10px 16px 11px 16px;
-  box-shadow: 0 8px 24px rgba(45, 38, 20, 0.14);
-  text-align: center;
-  z-index: 20;
-  pointer-events: auto;
-}
-
+/* ==========================================================================
+   SHARED CARD & ELEMENT STYLES
+   ========================================================================== */
 .brand-title {
   font-family: var(--font-heading);
   font-size: 13px;
@@ -165,33 +375,12 @@ html, body {
   margin: 0;
 }
 
-/* Floating Bottom Card (Range Readout, Multiplier, Lock It In Button) */
-.floating-card-bottom {
-  position: absolute;
-  bottom: calc(env(safe-area-inset-bottom, 10px) + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 20px);
-  max-width: 440px;
-  background: var(--color-card-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1.5px solid var(--color-border);
-  border-radius: 18px;
-  padding: 11px 16px 13px 16px;
-  box-shadow: 0 8px 24px rgba(45, 38, 20, 0.14);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 20;
-  pointer-events: auto;
-}
-
+/* Readout Panel inside Bottom Card */
 .readout-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 2px;
+  padding-bottom: 1px;
 }
 
 .range-display {
@@ -265,19 +454,7 @@ html, body {
   transform: scale(0.985);
 }
 
-/* Corner Floating Test Box (Palettes & Skies) */
-.corner-test-panel {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 8px) + 8px);
-  right: 10px;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  pointer-events: auto;
-}
-
+/* Corner Test Box (Palettes & Skies) */
 .corner-toggle-btn {
   background: var(--color-card-bg);
   backdrop-filter: blur(8px);
@@ -291,7 +468,7 @@ html, body {
   color: var(--color-deep);
   cursor: pointer;
   touch-action: manipulation;
-  box-shadow: 0 4px 12px rgba(45, 38, 20, 0.12);
+  box-shadow: 0 4px 12px rgba(45, 38, 20, 0.15);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -309,11 +486,10 @@ html, body {
   border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 10px 12px;
-  box-shadow: 0 8px 24px rgba(45, 38, 20, 0.18);
+  box-shadow: 0 8px 24px rgba(45, 38, 20, 0.2);
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 220px;
 }
 
 .corner-popup-content.hidden {
@@ -336,8 +512,8 @@ html, body {
 
 .test-pill-btn {
   flex: 1;
-  min-height: 32px;
-  padding: 4px 6px;
+  min-height: 30px;
+  padding: 3px 5px;
   font-family: var(--font-heading);
   font-size: 11px;
   font-weight: 600;
