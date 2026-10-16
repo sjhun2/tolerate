@@ -5,12 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light" />
     <title>Tolerate: The Deep Drop</title>
-    <meta name="description" content="Daily number-estimation game where you set a mattress range over a canyon to catch the jumper." />
+    <meta name="description" content="A daily number-estimation game where you set a mattress range over a canyon to catch the jumper." />
     <meta property="og:title" content="Tolerate: The Deep Drop" />
-    <meta property="og:description" content="Daily number-estimation game where you set a mattress range over a canyon to catch the jumper." />
+    <meta property="og:description" content="A daily number-estimation game where you set a mattress range over a canyon to catch the jumper." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="manifest" href="./manifest.json" />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
@@ -18,45 +17,12 @@
     <div class="fullscreen-tint-overlay" aria-hidden="true"></div>
 
     <main class="game-viewport">
-      <!-- Top Card: Brand Title & Question -->
-      <header class="floating-card-top" aria-label="Question Details">
-        <div class="brand-title">
-          <span>TOLERATE</span>
-          <span class="brand-dot" aria-hidden="true"></span>
-          <span>THE DEEP DROP</span>
-        </div>
-        <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
-        <h1 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h1>
-      </header>
-
-      <!-- Middle Canyon Playable Scene -->
-      <div id="scene-svg-wrapper" class="scene-canvas-wrapper" aria-label="Canyon Play Area">
-        <!-- SVG rendered dynamically by game.js -->
-      </div>
-
-      <!-- Bottom Card: Range Readout, Multiplier, and Lock Button -->
-      <section class="floating-card-bottom" aria-label="Controls and Range Selection">
-        <div class="readout-panel">
-          <div class="range-display">
-            <div class="range-label-row">
-              <span class="range-label">Chosen Range</span>
-              <span id="emotion-badge-display" class="emotion-tag chill">Chill</span>
-            </div>
-            <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
-          </div>
-          <div class="multiplier-tag">
-            <span class="multiplier-label">Multiplier</span>
-            <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
-          </div>
-        </div>
-
-        <button id="btn-lock-in" type="button" class="btn-lock" aria-label="Lock in your chosen range">
-          Lock it in
-        </button>
-      </section>
-
-      <!-- Floating Test Panel: Anchored in Bottom-Left Corner away from cards -->
+      <!-- Top-Left Floating Test Panel: Small & anchored at the very top-left corner -->
       <aside class="corner-test-panel" aria-label="Developer Preview Controls">
+        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies and Palettes">
+          <span>⚙️ Theme</span>
+        </button>
+
         <div id="corner-popup-content" class="corner-popup-content hidden">
           <div>
             <div class="test-section-title">Sky Slots:</div>
@@ -88,11 +54,43 @@
             </div>
           </div>
         </div>
-
-        <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies and Palettes">
-          <span>⚙️ Theme</span>
-        </button>
       </aside>
+
+      <!-- Top Card: Brand Title & Question -->
+      <header class="floating-card-top" aria-label="Question Details">
+        <div class="brand-title">
+          <span>TOLERATE</span>
+          <span class="brand-dot" aria-hidden="true"></span>
+          <span>THE DEEP DROP</span>
+        </div>
+        <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
+        <h1 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h1>
+      </header>
+
+      <!-- Middle Canyon Playable Scene -->
+      <div id="scene-svg-wrapper" class="scene-canvas-wrapper" aria-label="Canyon Play Area">
+        <!-- SVG rendered dynamically by game.js -->
+      </div>
+
+      <!-- Bottom Card: Range Readout, Multiplier, and Lock Button -->
+      <section class="floating-card-bottom" aria-label="Controls and Range Selection">
+        <div class="readout-panel">
+          <div class="range-display">
+            <div class="range-label-row">
+              <span class="range-label">Chosen Range</span>
+            </div>
+            <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
+          </div>
+          <div class="multiplier-tag">
+            <span class="multiplier-label">Multiplier</span>
+            <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
+          </div>
+        </div>
+
+        <button id="btn-lock-in" type="button" class="btn-lock" aria-label="Lock in your chosen range">
+          Lock it in
+        </button>
+      </section>
     </main>
 
     <!-- Scripts -->
