@@ -977,37 +977,13 @@ html, body {
   }
 }
 
-/* Floating Toast Banner */
-.game-toast {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 8px) + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-card-bg);
-  color: var(--color-deep);
-  border: 1.5px solid var(--color-border);
-  box-shadow: 0 8px 24px rgba(5, 11, 9, 0.35);
-  border-radius: 999px;
-  padding: 10px 20px;
-  font-family: var(--font-heading);
-  font-size: 14px;
-  font-weight: 700;
-  z-index: 100;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  white-space: nowrap;
-}
-
-.game-toast.hidden {
-  display: none !important;
-}
+/* Removed top pill toast (Item 1) */
 
 .corner-test-panel.hidden {
   display: none !important;
 }
 
-/* Legacy toast notice fallback */
+/* Status Notice (Modal / Banner) */
 .toast-notice {
   position: fixed;
   top: 50%;
