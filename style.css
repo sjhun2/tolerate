@@ -47,13 +47,15 @@ html, body {
   margin: 0;
   padding: 0;
   font-family: var(--font-body);
-  /* Continuous canyon abyss background: matches abyss gradient and continues #050B09 to bottom */
+  /* Continuous canyon abyss background */
   background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #8AA39A 36%, #5E7A71 52%, #33463F 68%, #121C18 84%, #050B09 100%);
   background-color: #050B09;
   color: var(--color-deep);
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Full-Screen Atmospheric Tint Overlay (Sunset warm tint / Night dark tint) */
@@ -79,9 +81,10 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-  /* Canyon continues directly behind bottom card to the bottom edge: #050B09 */
   background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #8AA39A 36%, #5E7A71 52%, #33463F 68%, #121C18 84%, #050B09 100%);
   background-color: #050B09;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Middle Playable Scene Wrapper */
@@ -95,8 +98,10 @@ html, body {
   align-items: center;
   padding-top: calc(env(safe-area-inset-top, 8px) + 78px);
   padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 104px);
-  pointer-events: none;
+  pointer-events: auto;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .game-svg {
@@ -105,6 +110,9 @@ html, body {
   width: 100%;
   overflow: visible;
   pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Floating Question Card (Top) */
@@ -385,7 +393,7 @@ html, body {
 }
 
 /* ==========================================================================
-   MILESTONE 3 RESULT CARD STYLES (Item 6)
+   MILESTONE 3 RESULT CARD STYLES
    ========================================================================== */
 .result-header-row {
   display: flex;
@@ -554,7 +562,6 @@ html, body {
 
 /* ==========================================================================
    JUMPER MOOD STATES & ANIMATIONS
-   Crossfades smoothly between Chill, Nervous, Panic, Relieved, Screaming
    ========================================================================== */
 .mood-layer {
   opacity: 0;
