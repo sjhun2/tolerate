@@ -905,7 +905,109 @@ html, body {
 .sky-dot.sunset { background: #FF7043; }
 .sky-dot.night { background: #1A237E; }
 
-/* Toast notice */
+/* Milestone 4: Fullscreen Loading and Empty Screens (Items 4 & 8) */
+.app-fullscreen-screen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 24%, #8AA39A 36%, #5E7A71 52%, #33463F 68%, #121C18 84%, #050B09 100%);
+  background-color: #050B09;
+  padding: 20px;
+  transition: opacity 0.3s ease;
+}
+
+.app-fullscreen-screen.hidden {
+  display: none !important;
+}
+
+.app-screen-card {
+  background: var(--color-card-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid var(--color-border);
+  box-shadow: 0 10px 30px rgba(5, 11, 9, 0.45);
+  border-radius: 20px;
+  padding: 30px 24px;
+  max-width: 360px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.brand-title-small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.screen-heading {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-deep);
+  line-height: 1.35;
+}
+
+.screen-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.loading-spinner {
+  width: 38px;
+  height: 38px;
+  border: 3.5px solid rgba(61, 74, 46, 0.2);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+  margin: 8px 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Floating Toast Banner */
+.game-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 8px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-card-bg);
+  color: var(--color-deep);
+  border: 1.5px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(5, 11, 9, 0.35);
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 700;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  white-space: nowrap;
+}
+
+.game-toast.hidden {
+  display: none !important;
+}
+
+.corner-test-panel.hidden {
+  display: none !important;
+}
+
+/* Legacy toast notice fallback */
 .toast-notice {
   position: fixed;
   top: 50%;
