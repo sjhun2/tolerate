@@ -11,65 +11,74 @@ const CONFIG = {
   MAX_MULTIPLIER: 50,
   DEFAULT_PALETTE: 'golden', // Golden default
 
+  // =========================================================================
+  // SUPABASE BACKEND INTEGRATION (Milestone 4)
+  // =========================================================================
+  SUPABASE_URL: 'https://szvlqrkhedcgldsemadj.supabase.co/rest/v1/',
+  SUPABASE_ANON_KEY: 'sb_publishable_FcMez6CruaZxYgMrXyY6QA_XI5uFmJY',
+
+  // Developer Test Mode (defaults to false)
+  // When false: loads real questions via get_today(), hides test panel & answer overrides.
+  // When true: enables test panel, custom true answer overrides, and test question fallbacks.
+  TEST_MODE: false,
+
   // Multiplier formula configuration: (scale / range_width) ** MULTIPLIER_EXPONENT
   // Capped at (MAX_SCALE_RATIO ** MULTIPLIER_EXPONENT) ≈ 10.456
   MULTIPLIER_EXPONENT: 0.6,
   MAX_SCALE_RATIO: 50,
 
-  // Milestone 2 & 3 slider constraints
+  // Slider constraints
   STEP_SIZE: 10,           // Arrow key step
   SHIFT_STEP_SIZE: 100,    // Shift + Arrow key step
-  MIN_WIDTH_RATIO: 1 / 50, // Minimum width = scale / 50
+  MIN_WIDTH_RATIO: 1 / 50, // Minimum width = scale / 50 (2%)
 
   // =========================================================================
-  // TEST DATA: Linear scales only for Milestone 3 (Fake test data)
-  // Three test-only questions with matching skies per slot
+  // TEST DATA: Only used when TEST_MODE is true (Item 7)
+  // In normal play (TEST_MODE: false), questions are fetched from get_today()
+  // and true answers are never known to the client until submit_answer returns.
   // =========================================================================
   TEST_QUESTIONS: {
     1: {
       id: 'test_slot_1',
       slot: 1,
       text: 'How tall is the Eiffel Tower, in feet?',
+      question: 'How tall is the Eiffel Tower, in feet?',
       unit: 'ft',
-      trueAnswer: 1083,
       scaleMin: 0,
       scaleMax: 2000,
       scaleType: 'linear',
-      // Compatibility aliases
-      true_answer: 1083,
       scale_min: 0,
       scale_max: 2000,
       scale_type: 'linear',
+      trueAnswer: 1083, // TEST_MODE ONLY
     },
     2: {
       id: 'test_slot_2',
       slot: 2,
       text: 'How tall is Mount Everest, in feet?',
+      question: 'How tall is Mount Everest, in feet?',
       unit: 'ft',
-      trueAnswer: 29032,
       scaleMin: 0,
       scaleMax: 40000,
       scaleType: 'linear',
-      // Compatibility aliases
-      true_answer: 29032,
       scale_min: 0,
       scale_max: 40000,
       scale_type: 'linear',
+      trueAnswer: 29032, // TEST_MODE ONLY
     },
     3: {
       id: 'test_slot_3',
       slot: 3,
       text: 'How long is the Nile River, in miles?',
+      question: 'How long is the Nile River, in miles?',
       unit: 'mi',
-      trueAnswer: 4132,
       scaleMin: 1000,
       scaleMax: 9000,
       scaleType: 'linear',
-      // Compatibility aliases
-      true_answer: 4132,
       scale_min: 1000,
       scale_max: 9000,
       scale_type: 'linear',
+      trueAnswer: 4132, // TEST_MODE ONLY
     },
   },
 
@@ -175,38 +184,6 @@ const CONFIG = {
       sunColor: '#FFFFFF',
       moonColor: '#FFF3B0',
     },
-  },
-
-  // Initial Question (defaults to Slot 1)
-  QUESTION: {
-    id: 'test_slot_1',
-    slot: 1,
-    text: 'How tall is the Eiffel Tower, in feet?',
-    unit: 'ft',
-    trueAnswer: 1083,
-    scaleMin: 0,
-    scaleMax: 2000,
-    scaleType: 'linear',
-    true_answer: 1083,
-    scale_min: 0,
-    scale_max: 2000,
-    scale_type: 'linear',
-  },
-
-  // Default Daily Question alias
-  DEFAULT_QUESTION: {
-    id: 'test_slot_1',
-    slot: 1,
-    text: 'How tall is the Eiffel Tower, in feet?',
-    unit: 'ft',
-    trueAnswer: 1083,
-    scaleMin: 0,
-    scaleMax: 2000,
-    scaleType: 'linear',
-    scale_min: 0,
-    scale_max: 2000,
-    true_answer: 1083,
-    scale_type: 'linear',
   },
 
   // Canyon & scene geometry
