@@ -3,12 +3,13 @@
  * File: game.js
  * Plain JavaScript (no build tools, no frameworks).
  * Milestone 3: Reveal animation, test data, hit/miss sequences, and result card.
+ * Strap drag fix: Pointer capture, grab offset preservation, Y-movement agnostic.
  */
 
 (function () {
   'use strict';
 
-  // Game state (Item 7 from M2 + M3 reveal state)
+  // Game state
   const state = {
     mode: 'calibrating', // 'calibrating' | 'locked' | 'revealing' | 'result'
     currentSlot: 1,      // 1: Day, 2: Sunset, 3: Night
@@ -19,26 +20,28 @@
     currentLo: 600,
     currentHi: 1400,
 
-    // Dragging state
-    activeDragHandle: null, // 'left', 'right', or 'mattress'
+    // Dragging state & grab offset tracking
+    activeDragHandle: null,  // 'left', 'right', or 'mattress'
+    dragGrabOffset: 0,       // Distance from click point to strap center (prevents jumping)
     dragStartSvgX: 0,
     dragStartLo: 600,
     dragStartHi: 1400,
+    capturedPointerId: null, // Active pointer ID for pointer capture
     toastTimeout: null,
 
     // Milestone 3 Reveal Animation State
     revealData: {
       jumperX: 0,
       jumperY: 146,
-      jumperFacing: 1,      // 1 = right, -1 = left
+      jumperFacing: 1,       // 1 = right, -1 = left
       jumperOpacity: 1,
       jumperScaleRatio: 1,
-      emotion: 'chill',     // 'chill', 'nervous', 'panic', 'relieved', 'screaming'
+      emotion: 'chill',      // 'chill', 'nervous', 'panic', 'relieved', 'screaming'
       isWalking: false,
       showMarker: false,
       markerX: 0,
       markerValue: 0,
-      speechBubble: null,   // null | { text: 'Whew!', type: 'hit' } | { text: 'AAHHHH!', type: 'miss' }
+      speechBubble: null,    // null | { text: 'Whew!', type: 'hit' } | { text: 'AAHHHH!', type: 'miss' }
       mattressSquashing: false,
       mattressShake: false,
       scoreResult: null,
@@ -121,14 +124,11 @@
       fraction = (hi - lo) / (max - min);
     }
 
-    // Minimum allowed fraction is 0.02 (range width = scale / 50)
     fraction = Math.max(0.02, Math.min(1.0, fraction));
 
-    // Multiplier M = (1 / fraction) ** MULTIPLIER_EXPONENT
     const multiplier = Math.pow(1 / fraction, exponent);
     const roundedMultiplier = Number(multiplier.toFixed(1));
 
-    // Hit condition: lo <= trueAnswer <= hi
     const answer = trueAnswer !== undefined ? trueAnswer : (q.trueAnswer !== undefined ? q.trueAnswer : q.true_answer);
     const hit = lo <= answer && answer <= hi;
     const points = hit ? Math.round(basePoints * multiplier) : 0;
@@ -146,7 +146,7 @@
   function calculateRangeValues() {
     const q = state.question;
     const { min, max, total } = getQuestionScale(q);
-    const step = q.scaleMax > 10000 ? 100 : 10;
+    const step = total > 10000 ? 100 : 10;
     const lo = Math.round(state.currentLo / step) * step;
     const hi = Math.round(state.currentHi / step) * step;
     const width = Math.max(step, hi - lo);
@@ -233,15 +233,16 @@
 
   /**
    * Convert client (screen) coordinates to exact SVG coordinates
+   * Ignores clientY: computes purely along horizontal axis.
    */
   function screenToSvgCoords(clientX, clientY) {
     const svg = document.getElementById('game-canvas');
-    if (!svg) return { x: clientX, y: clientY };
+    if (!svg) return { x: clientX, y: clientY || 0 };
 
     if (svg.getScreenCTM) {
       const pt = svg.createSVGPoint();
       pt.x = clientX;
-      pt.y = clientY;
+      pt.y = clientY || 0;
       const ctm = svg.getScreenCTM();
       if (ctm) {
         return pt.matrixTransform(ctm.inverse());
@@ -252,7 +253,7 @@
     const layout = computeSceneLayout();
     return {
       x: ((clientX - rect.left) / rect.width) * layout.vw,
-      y: ((clientY - rect.top) / rect.height) * layout.vh,
+      y: 0,
     };
   }
 
@@ -282,7 +283,6 @@
 
   /**
    * Set active sky slot and question (1 = Day, 2 = Sunset, 3 = Night)
-   * The question text, scale labels, and sky change with the slot (Milestone 3 Test Data).
    */
   function setSlot(slotNumber, resetRange = true) {
     state.currentSlot = Number(slotNumber);
@@ -294,22 +294,18 @@
     root.style.setProperty('--tint-color', slotInfo.tintColor);
     root.style.setProperty('--tint-opacity', slotInfo.tintOpacity.toString());
 
-    // Load matching test question from CONFIG.TEST_QUESTIONS
     const testQ = (CONFIG.TEST_QUESTIONS && CONFIG.TEST_QUESTIONS[state.currentSlot]) || CONFIG.QUESTION;
     state.question = { ...testQ };
 
-    // Update Question Card UI
     const slotNumEl = document.getElementById('current-slot-num');
     if (slotNumEl) slotNumEl.textContent = state.currentSlot;
 
     const qTextEl = document.getElementById('question-text-display');
     if (qTextEl) qTextEl.textContent = state.question.text;
 
-    // Update Test Panel input value
     const testInput = document.getElementById('test-true-answer-input');
     if (testInput) testInput.value = state.question.trueAnswer;
 
-    // Reset range to middle 40% of scale if requested
     if (resetRange) {
       const { min, max, total } = getQuestionScale(state.question);
       const step = total > 10000 ? 100 : 10;
@@ -317,9 +313,10 @@
       state.currentHi = Math.round((min + total * 0.70) / step) * step;
     }
 
-    // Reset animation state
     clearAllAnimationTimers();
     state.mode = 'calibrating';
+    state.activeDragHandle = null;
+    state.capturedPointerId = null;
     state.revealData.showMarker = false;
     state.revealData.speechBubble = null;
     state.revealData.mattressSquashing = false;
@@ -329,10 +326,8 @@
     state.revealData.jumperScaleRatio = 1;
     state.revealData.isWalking = false;
 
-    // Switch card view back to calibrating
     showCardView('calibrating');
 
-    // Update sky tab active states
     document.querySelectorAll('.sky-pill-btn').forEach(btn => {
       btn.classList.toggle('active', Number(btn.dataset.slot) === state.currentSlot);
     });
@@ -341,7 +336,7 @@
   }
 
   /**
-   * Switch between calibrating and result card views (Item 6)
+   * Switch between calibrating and result card views
    */
   function showCardView(viewName) {
     const calView = document.getElementById('card-calibrating-view');
@@ -373,10 +368,10 @@
   }
 
   /**
-   * Update range by feet with constraint enforcement
+   * Update range by value with constraint enforcement
    */
   function setHandleValue(handle, targetValue) {
-    if (state.mode !== 'calibrating') return; // Cannot drag when locked
+    if (state.mode !== 'calibrating') return;
 
     const { min, max, total } = getQuestionScale(state.question);
     const minWidth = Math.round(total * CONFIG.MIN_WIDTH_RATIO);
@@ -395,7 +390,10 @@
   }
 
   /**
-   * Handle dragging movement from pointer coordinates
+   * Handle dragging movement from pointer coordinates:
+   * 1. Uses ONLY horizontal clientX (completely ignores Y).
+   * 2. Subtracts dragGrabOffset so the strap stays exactly where grabbed without jumping.
+   * 3. Respects all scale and min-width limits.
    */
   function updateFromPointer(clientX) {
     if (state.mode !== 'calibrating' || !state.activeDragHandle) return;
@@ -404,29 +402,35 @@
     const svgCoords = screenToSvgCoords(clientX, 0);
     const { min, max, total } = getQuestionScale(state.question);
     const step = total > 10000 ? 100 : 10;
+    const minWidth = Math.round(total * CONFIG.MIN_WIDTH_RATIO); // 2% minimum width
 
-    if (state.activeDragHandle === 'left' || state.activeDragHandle === 'right') {
-      const targetValue = canyonXToNumber(svgCoords.x, layout);
-      setHandleValue(state.activeDragHandle, targetValue);
+    if (state.activeDragHandle === 'left') {
+      const targetSvgX = svgCoords.x - state.dragGrabOffset;
+      const targetValue = canyonXToNumber(targetSvgX, layout);
+      const maxAllowed = state.currentHi - minWidth;
+      const clamped = Math.max(min, Math.min(targetValue, maxAllowed));
+      const rounded = Math.round(clamped / step) * step;
+      state.currentLo = Math.min(rounded, maxAllowed);
+      renderScene();
+    } else if (state.activeDragHandle === 'right') {
+      const targetSvgX = svgCoords.x - state.dragGrabOffset;
+      const targetValue = canyonXToNumber(targetSvgX, layout);
+      const minAllowed = state.currentLo + minWidth;
+      const clamped = Math.max(minAllowed, Math.min(targetValue, max));
+      const rounded = Math.round(clamped / step) * step;
+      state.currentHi = Math.max(rounded, minAllowed);
+      renderScene();
     } else if (state.activeDragHandle === 'mattress') {
       const deltaSvgX = svgCoords.x - state.dragStartSvgX;
       const unitsDelta = (deltaSvgX / layout.canyonWidth) * total;
       const span = state.dragStartHi - state.dragStartLo;
 
       let targetLo = Math.round((state.dragStartLo + unitsDelta) / step) * step;
-      let targetHi = targetLo + span;
-
-      if (targetLo < min) {
-        targetLo = min;
-        targetHi = targetLo + span;
-      }
-      if (targetHi > max) {
-        targetHi = max;
-        targetLo = targetHi - span;
-      }
+      if (targetLo < min) targetLo = min;
+      if (targetLo + span > max) targetLo = max - span;
 
       state.currentLo = targetLo;
-      state.currentHi = targetHi;
+      state.currentHi = targetLo + span;
       renderScene();
     }
   }
@@ -474,17 +478,7 @@
   }
 
   /**
-   * =========================================================================
-   * MILESTONE 3: THE REVEAL SEQUENCE
-   * =========================================================================
-   * 1. Lock: Button disabled, straps cannot be dragged, quick shake.
-   * 2. Jumper stops pacing and WALKS briskly along bridge to true answer position. Marker appears.
-   * 3. 1.0s suspense pause with nervous face, steps off edge, falls accelerating (~1.2s).
-   * 4. HIT: mattress squashes ~15%, bounces, settles, relieved face, speech bubble "Whew!",
-   *    points count up from 0.
-   * 5. MISS: falls past mattress, screaming face, wobbling "AAHHHH!", shrinks and fades into dark abyss,
-   *    shows "BUST · 0 pts" (no death text).
-   * 6. Result card replaces bottom card.
+   * Start Reveal Sequence (Milestone 3)
    */
   function startRevealSequence() {
     if (state.mode !== 'calibrating') return;
@@ -492,7 +486,7 @@
     clearAllAnimationTimers();
     state.mode = 'locked';
 
-    // 1. Lock: Button disabled, straps cannot be dragged
+    // Disable lock button
     const btnLock = document.getElementById('btn-lock-in');
     if (btnLock) btnLock.disabled = true;
 
@@ -514,7 +508,7 @@
     const startX = (numberToCanyonX(state.currentLo, layout) + numberToCanyonX(state.currentHi, layout)) / 2;
     const targetX = numberToCanyonX(trueAns, layout);
 
-    // Respect prefers-reduced-motion
+    // Reduced motion support
     const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion) {
       state.mode = 'result';
@@ -540,7 +534,7 @@
       return;
     }
 
-    // 2. Walking Phase: Jumper stops pacing and WALKS briskly along bridge
+    // Walking Phase
     state.mode = 'revealing';
     state.revealData.jumperX = startX;
     state.revealData.jumperY = CONFIG.CANVAS.BRIDGE_Y;
@@ -550,7 +544,7 @@
     renderScene();
 
     const walkDist = Math.abs(targetX - startX);
-    const walkDuration = Math.max(0.6, Math.min(1.2, walkDist / 140)); // brisk pace
+    const walkDuration = Math.max(0.6, Math.min(1.2, walkDist / 140));
     const walkStartTime = performance.now();
 
     function stepWalk(now) {
@@ -569,7 +563,6 @@
       if (progress < 1) {
         requestAnimationFrame(stepWalk);
       } else {
-        // Arrived at true answer on bridge!
         state.revealData.jumperX = targetX;
         state.revealData.isWalking = false;
         state.revealData.showMarker = true;
@@ -578,7 +571,6 @@
         state.revealData.emotion = 'nervous';
         renderScene();
 
-        // 3. Pause about 1.0 second for suspense, with nervous expression
         addTimer(() => {
           startFall(targetX, score, rangeData);
         }, 1000);
@@ -589,23 +581,20 @@
   }
 
   /**
-   * Jumper steps off the bridge edge and falls straight down, accelerating for ~1.2s.
+   * Accelerating Fall Phase
    */
   function startFall(fallX, score, rangeData) {
     if (state.mode !== 'revealing') return;
 
-    const bridgeY = CONFIG.CANVAS.BRIDGE_Y; // 146
-    const mattressY = CONFIG.CANVAS.MATTRESS_Y; // 298
-    const fallDuration = 1.2; // ~1.2s accelerating drop
+    const bridgeY = CONFIG.CANVAS.BRIDGE_Y;
+    const mattressY = CONFIG.CANVAS.MATTRESS_Y;
+    const fallDuration = 1.2;
     const fallStartTime = performance.now();
 
-    // Target Y: If hit, lands on mattress top (mattressY - 14 = 284).
-    // If miss, plunges straight down past mattress into abyss (y = 480).
     const targetY = score.hit ? (mattressY - 14) : 480;
 
     state.revealData.emotion = score.hit ? 'panic' : 'screaming';
     if (!score.hit) {
-      // Wobbling "AAHHHH!" speech bubble beside him during plunge
       state.revealData.speechBubble = { text: 'AAHHHH!', type: 'miss' };
     }
     renderScene();
@@ -614,20 +603,15 @@
       if (state.mode !== 'revealing') return;
       const elapsed = (now - fallStartTime) / 1000;
       const rawProgress = Math.min(1, elapsed / fallDuration);
-
-      // Accelerating fall: quadratic ease-in
-      const progress = rawProgress * rawProgress;
+      const progress = rawProgress * rawProgress; // Quadratic acceleration
       const currentY = bridgeY + (targetY - bridgeY) * progress;
 
       state.revealData.jumperY = currentY;
 
-      // In miss, he shrinks slightly and fades out into darkness near bottom
-      if (!score.hit) {
-        if (progress > 0.4) {
-          const fadeProgress = (progress - 0.4) / 0.6;
-          state.revealData.jumperOpacity = Math.max(0, 1 - fadeProgress);
-          state.revealData.jumperScaleRatio = Math.max(0.68, 1 - fadeProgress * 0.32);
-        }
+      if (!score.hit && progress > 0.4) {
+        const fadeProgress = (progress - 0.4) / 0.6;
+        state.revealData.jumperOpacity = Math.max(0, 1 - fadeProgress);
+        state.revealData.jumperScaleRatio = Math.max(0.68, 1 - fadeProgress * 0.32);
       }
 
       const jumperGroup = document.getElementById('jumper-container');
@@ -655,30 +639,23 @@
     requestAnimationFrame(stepFall);
   }
 
-  /**
-   * 4. HIT Sequence: Mattress squashes ~15%, jumper bounces once/twice, settles with relieved face,
-   * speech bubble says "Whew!", and points count up from 0.
-   */
   function onHitLanded(fallX, score, rangeData) {
     state.revealData.mattressSquashing = true;
     state.revealData.emotion = 'relieved';
     state.revealData.speechBubble = { text: 'Whew!', type: 'hit' };
     renderScene();
 
-    // Rebound bounce 1
     addTimer(() => {
       state.revealData.jumperY = CONFIG.CANVAS.MATTRESS_Y - 26;
       renderScene();
     }, 180);
 
-    // Settle on mattress
     addTimer(() => {
       state.revealData.mattressSquashing = false;
       state.revealData.jumperY = CONFIG.CANVAS.MATTRESS_Y - 14;
       renderScene();
     }, 380);
 
-    // Points count up from 0 to score.points
     addTimer(() => {
       state.mode = 'result';
       populateResultCard(score, rangeData);
@@ -687,9 +664,6 @@
     }, 700);
   }
 
-  /**
-   * 5. MISS Sequence: Jumper has faded into darkness, show "BUST · 0 pts" (no death text).
-   */
   function onMissFinished(score, rangeData) {
     state.revealData.speechBubble = { text: 'BUST · 0 pts', type: 'miss' };
     renderScene();
@@ -701,9 +675,6 @@
     }, 750);
   }
 
-  /**
-   * Populate Result Card with details (Item 6)
-   */
   function populateResultCard(score, rangeData) {
     const badge = document.getElementById('result-status-badge');
     const pointsEl = document.getElementById('result-points-display');
@@ -734,14 +705,11 @@
     }
   }
 
-  /**
-   * Animate points counting up from 0 to target points (Item 4)
-   */
   function animatePointsCountUp(targetPoints) {
     const pointsEl = document.getElementById('result-points-display');
     if (!pointsEl || targetPoints <= 0) return;
 
-    const duration = 800; // ms
+    const duration = 800;
     const startTime = performance.now();
 
     function stepCount(now) {
@@ -760,11 +728,6 @@
     requestAnimationFrame(stepCount);
   }
 
-  /**
-   * Advance to Next Question (Item 7):
-   * Moves to next slot (1 -> 2 -> 3 -> 1), resets straps to middle 40% of scale,
-   * updates sky and question text.
-   */
   function advanceToNextQuestion() {
     const nextSlot = (state.currentSlot % 3) + 1;
     setSlot(nextSlot, true);
@@ -827,7 +790,7 @@
     const leftScaleLabelX = Math.max(22, canyonLeft);
     const rightScaleLabelX = Math.min(vw - 26, canyonRight);
 
-    // SVG Defs with exact requested abyss gradient (Item 2)
+    // SVG Defs
     const defs = `
       <defs>
         <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -877,7 +840,7 @@
       </defs>
     `;
 
-    // 1. Extended Full-Screen Sky
+    // 1. Sky
     const skyRect = `<rect x="-2000" y="-300" width="${vw + 4000}" height="500" fill="url(#skyGrad)" />`;
 
     let skyFeatures = '';
@@ -928,12 +891,12 @@
       <path d="M -2000 135 Q ${vw * 0.25} 115 ${vw * 0.5} 128 Q ${vw * 0.75} 112 ${vw + 2000} 130 L ${vw + 2000} 220 L -2000 220 Z" fill="#699E79" opacity="0.35" />
     `;
 
-    // 2. Canyon Abyss: Clean vertical gradient without streaks or wavy lines
+    // 2. Canyon Abyss: Clean vertical gradient
     const canyonChasm = `
       <rect x="${canyonLeft}" y="146" width="${canyonWidth}" height="1854" fill="url(#abyssChasmGrad)" />
     `;
 
-    // 3. Left and Right Cliffs (Item 9: Clean rock facets in slightly darker cliff tones, no black holes)
+    // 3. Cliffs
     const leftCliff = `
       <path d="M -2000 100 Q -800 95 ${canyonLeft - 20} 118 L ${canyonLeft} 146 L ${canyonLeft} 2000 L -2000 2000 Z" fill="url(#leftCliffGrad)" />
       <path d="M ${canyonLeft - 20} 118 L ${canyonLeft} 146 L ${canyonLeft} 2000 L ${canyonLeft - 6} 2000 L ${canyonLeft - 6} 150 L ${canyonLeft - 22} 122 Z" fill="${pal.hillsDark}" opacity="0.45" />
@@ -952,7 +915,7 @@
       <path d="M ${vw + 2000} 98 Q ${vw + 800} 95 ${canyonRight + 20} 118 L ${canyonRight} 146" stroke="#A7C281" stroke-width="3" fill="none" stroke-linecap="round" />
     `;
 
-    // 4. Pine Trees on cliffs
+    // 4. Pine Trees
     const pineTrees = `
       ${drawPineTree(canyonLeft - 9, 144, 0.65, pal.deepGreen)}
       ${drawPineTree(canyonLeft - 24, 138, 0.85, pal.deepGreen)}
@@ -967,7 +930,7 @@
       ${drawPineTree(canyonRight + 105, 116, 1.1, pal.deepGreen)}
     `;
 
-    // 5. Clean Rope-and-Plank Wooden Bridge spanning whole canyon
+    // 5. Wooden Bridge
     const leftAnchorX = canyonLeft - 6;
     const rightAnchorX = canyonRight + 6;
     const bridgeSpan = canyonWidth;
@@ -1023,7 +986,7 @@
       </g>
     `;
 
-    // Scale Number Labels at Bridge Anchors (in cream pills)
+    // Scale Number Labels
     const scaleEndpointLabels = `
       <g id="scale-endpoint-labels" font-family="'Fredoka', system-ui, sans-serif" font-size="11" font-weight="700">
         <g transform="translate(${leftScaleLabelX}, ${bridgeRopeTopY - 14})">
@@ -1042,17 +1005,15 @@
       </g>
     `;
 
-    // True Answer Bridge Marker (Item 2: Shows when jumper arrives at true answer spot)
+    // True Answer Bridge Marker
     let trueAnswerMarkerSvg = '';
     if (state.revealData.showMarker) {
       const mx = state.revealData.markerX;
       trueAnswerMarkerSvg = `
         <g id="true-answer-marker" transform="translate(${mx}, ${bridgeY})" filter="url(#softShadow)">
-          <!-- Marker flag pin on the bridge -->
           <line x1="0" y1="-26" x2="0" y2="4" stroke="${pal.accentOrange}" stroke-width="2" stroke-linecap="round" />
           <polygon points="0,-26 14,-20 0,-14" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.8" />
           <circle cx="0" cy="4" r="2.5" fill="${pal.deepGreen}" />
-          <!-- Marker tooltip pill -->
           <g transform="translate(0, -33)">
             <rect x="-26" y="-8" width="52" height="16" rx="8" fill="${pal.creamBg}" stroke="${pal.accentOrange}" stroke-width="1.2" />
             <text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-family="'Fredoka', system-ui, sans-serif" font-size="9.5" font-weight="700" fill="${pal.deepGreen}">
@@ -1063,7 +1024,7 @@
       `;
     }
 
-    // 6. Human Jumper
+    // 6. Jumper
     const jumperScale = layout.jumperScale;
     const isCalibrating = state.mode === 'calibrating';
     const activeEmotion = isCalibrating ? rangeData.emotion : state.revealData.emotion;
@@ -1071,7 +1032,6 @@
     const currentJumperY = isCalibrating ? bridgeY : state.revealData.jumperY;
     const facing = state.revealData.jumperFacing || 1;
 
-    // Speech bubble SVG
     let speechBubbleSvg = '';
     if (state.revealData.speechBubble) {
       const sb = state.revealData.speechBubble;
@@ -1189,31 +1149,25 @@
                     </g>
                   </g>
 
-                  <!-- MOOD 4: RELIEVED (Item 4 - Whew! Landing face) -->
+                  <!-- MOOD 4: RELIEVED -->
                   <g class="mood-layer mood-layer-relieved">
-                    <!-- Happy arc eyes (^ ^) -->
                     <path d="M -4.8 -32.8 Q -3.3 -35 -1.8 -32.8" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
                     <path d="M 1.8 -32.8 Q 3.3 -35 4.8 -32.8" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
-                    <!-- Big relieved open smile -->
                     <path d="M -2.8 -29.2 Q 0 -26.2 2.8 -29.2" stroke="#8E3C18" stroke-width="1.1" fill="#FFE2C6" stroke-linecap="round" />
-                    <!-- Arms open wide in triumph/relief -->
-                    <path d="M -6.8 -27.5 Q -10 -25 -11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <path d="M 6.8 -27.5 Q 10 -25 11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path class="chill-arm-left" d="M -6.8 -27.5 Q -10 -25 -11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path class="chill-arm-right" d="M 6.8 -27.5 Q 10 -25 11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
                     <circle cx="-11" cy="-19.5" r="1.4" fill="#E2A684" />
                     <circle cx="11" cy="-19.5" r="1.4" fill="#E2A684" />
                   </g>
 
-                  <!-- MOOD 5: SCREAMING (Item 5 - Plunging past mattress into abyss) -->
+                  <!-- MOOD 5: SCREAMING -->
                   <g class="mood-layer mood-layer-screaming">
                     <circle cx="-3.3" cy="-33.2" r="0.65" fill="#000000" />
                     <circle cx="3.3" cy="-33.2" r="0.65" fill="#000000" />
-                    <!-- Arched terrified brows -->
                     <path d="M -5.5 -38.5 Q -3.3 -40.5 -1.2 -38.5" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
                     <path d="M 5.5 -38.5 Q 3.3 -40.5 1.2 -38.5" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
-                    <!-- Large screaming mouth -->
                     <ellipse cx="0" cy="-28.8" rx="2.4" ry="3.2" fill="#2B0500" stroke="#7A1800" stroke-width="0.8" />
                     <ellipse cx="0" cy="-27.2" rx="1.4" ry="1.0" fill="#E84855" />
-                    <!-- Arms flailing upwards in terror -->
                     <path d="M -6.8 -27.5 Q -11 -35 -9 -41" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
                     <path d="M 6.8 -27.5 Q 11 -35 8 -41" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
                     <circle cx="-9" cy="-41" r="1.5" fill="#E2A684" />
@@ -1229,7 +1183,7 @@
       </g>
     `;
 
-    // 7. Mattress Assembly & Draggable Straps
+    // 7. Mattress & Draggable Straps
     let mattressTufts = '';
     if (matWidth > 20) {
       const tuftSpacing = 14;
@@ -1244,7 +1198,7 @@
       }
     }
 
-    // Suspension cables: Item 8 CLEANUP: ONLY solid cables remain; dashed stabilizer lines deleted!
+    // Suspension cables
     const cables = `
       <g stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round">
         <line x1="${canyonLeft}" y1="210" x2="${strapLeftCenterX}" y2="${strapTopY}" />
@@ -1254,7 +1208,6 @@
       <circle cx="${canyonRight}" cy="210" r="3.5" fill="#3D4A47" />
     `;
 
-    // Thin vertical fabric straps
     const isLocked = state.mode !== 'calibrating';
     const straps = `
       <!-- Left Draggable Strap Handle -->
@@ -1270,6 +1223,7 @@
         aria-valuetext="${formatNum(rangeData.lo)} ${state.question.unit}"
       >
         <circle class="handle-focus-ring" cx="${strapLeftCenterX}" cy="${mattressY + mattressHeight / 2}" r="20" fill="none" stroke="${pal.deepGreen}" stroke-width="2" stroke-dasharray="3,3" />
+        <!-- 44px Hitbox -->
         <rect x="${strapLeftCenterX - 38}" y="${mattressY - 12}" width="44" height="${mattressHeight + 24}" fill="transparent" pointer-events="all" />
         <rect x="${strapLeftCenterX - 2.5}" y="${strapTopY}" width="5" height="3" rx="0.8" fill="none" stroke="${pal.buckle}" stroke-width="1.1" />
         <rect x="${strapLeftCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.6" />
@@ -1289,6 +1243,7 @@
         aria-valuetext="${formatNum(rangeData.hi)} ${state.question.unit}"
       >
         <circle class="handle-focus-ring" cx="${strapRightCenterX}" cy="${mattressY + mattressHeight / 2}" r="20" fill="none" stroke="${pal.deepGreen}" stroke-width="2" stroke-dasharray="3,3" />
+        <!-- 44px Hitbox -->
         <rect x="${strapRightCenterX - 6}" y="${mattressY - 12}" width="44" height="${mattressHeight + 24}" fill="transparent" pointer-events="all" />
         <rect x="${strapRightCenterX - 2.5}" y="${strapTopY}" width="5" height="3" rx="0.8" fill="none" stroke="${pal.buckle}" stroke-width="1.1" />
         <rect x="${strapRightCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.6" />
@@ -1296,7 +1251,6 @@
       </g>
     `;
 
-    // Mattress Assembly with Item 1 lock shake & Item 4 hit squash classes
     const shakeClass = state.revealData.mattressShake ? 'straps-locked-shake' : '';
     const squashClass = state.revealData.mattressSquashing ? 'mattress-squash' : '';
 
@@ -1331,7 +1285,7 @@
       </g>
     `;
 
-    // 8. Range Extrema Numbers with Cream Pill Background
+    // 8. Badges
     let strapNumbers = '';
     if (shouldMergeLabels) {
       const mergedText = `${leftNumStr} – ${rightNumStr}`;
@@ -1370,7 +1324,7 @@
       `;
     }
 
-    // 9. Multiplier floating above mattress
+    // 9. Multiplier
     const multiplierDisplay = `
       <g transform="translate(${matCenter}, ${mattressY - 17})">
         <rect x="-25" y="-12" width="50" height="24" rx="12" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
@@ -1389,7 +1343,6 @@
       </g>
     `;
 
-    // Assemble SVG
     const svgContent = `
       <svg
         id="game-canvas"
@@ -1426,7 +1379,8 @@
   }
 
   /**
-   * Bind Pointer and Keyboard Drag Events to Handle Straps & Mattress Body
+   * Bind Pointerdown and Keydown Events to Handle Straps & Mattress Body
+   * (Pointermove & Pointerup are managed globally on window + persistent container with PointerCapture)
    */
   function bindHandleEvents() {
     if (state.mode !== 'calibrating') return;
@@ -1448,39 +1402,36 @@
         e.stopPropagation();
 
         state.activeDragHandle = handle;
-        const svgCoords = screenToSvgCoords(e.clientX, 0);
-        state.dragStartSvgX = svgCoords.x;
-        state.dragStartLo = state.currentLo;
-        state.dragStartHi = state.currentHi;
+        state.capturedPointerId = e.pointerId;
 
-        try {
-          el.setPointerCapture(e.pointerId);
-        } catch (_) {}
-
-        el.classList.add('dragging');
-      });
-
-      el.addEventListener('pointermove', e => {
-        if (state.activeDragHandle === handle) {
-          e.preventDefault();
-          updateFromPointer(e.clientX);
-        }
-      });
-
-      const stopDrag = e => {
-        if (state.activeDragHandle === handle) {
+        // Requirement 1: Pointer capture on persistent container so drag keeps working everywhere
+        const container = document.getElementById('scene-svg-wrapper');
+        if (container && container.setPointerCapture) {
           try {
-            el.releasePointerCapture(e.pointerId);
+            container.setPointerCapture(e.pointerId);
           } catch (_) {}
-          el.classList.remove('dragging');
-          state.activeDragHandle = null;
         }
-      };
 
-      el.addEventListener('pointerup', stopDrag);
-      el.addEventListener('pointercancel', stopDrag);
+        // Requirement 3: Remember the gap between click point and strap edge (no jumping)
+        const layout = computeSceneLayout();
+        const svgCoords = screenToSvgCoords(e.clientX, 0);
 
-      // Keyboard support
+        if (handle === 'left') {
+          const currentStrapX = numberToCanyonX(state.currentLo, layout);
+          state.dragGrabOffset = svgCoords.x - currentStrapX;
+        } else if (handle === 'right') {
+          const currentStrapX = numberToCanyonX(state.currentHi, layout);
+          state.dragGrabOffset = svgCoords.x - currentStrapX;
+        } else if (handle === 'mattress') {
+          state.dragStartSvgX = svgCoords.x;
+          state.dragStartLo = state.currentLo;
+          state.dragStartHi = state.currentHi;
+        }
+
+        renderScene();
+      });
+
+      // Requirement 5: Keyboard control stays the same
       el.addEventListener('keydown', e => {
         if (state.mode !== 'calibrating') return;
         const { min, max, total } = getQuestionScale(state.question);
@@ -1572,14 +1523,44 @@
       }, 100);
     });
 
-    window.addEventListener('pointerup', () => {
-      if (state.activeDragHandle) {
-        state.activeDragHandle = null;
-        document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+    // =========================================================================
+    // GLOBAL POINTER DRAG HANDLERS (Requirements 1, 2, 4)
+    // Works across the entire screen, above, below, or outside browser window.
+    // Completely ignores Y movement.
+    // =========================================================================
+    function onGlobalPointerMove(e) {
+      if (state.mode === 'calibrating' && state.activeDragHandle) {
+        if (e.cancelable) e.preventDefault();
+        // Requirement 2: Use only clientX, completely ignore Y
+        updateFromPointer(e.clientX);
       }
-    });
+    }
 
-    // Lock it in button: Triggers Reveal Animation
+    function onGlobalPointerEnd(e) {
+      if (state.activeDragHandle) {
+        const container = document.getElementById('scene-svg-wrapper');
+        if (state.capturedPointerId !== null && container && container.releasePointerCapture) {
+          try {
+            container.releasePointerCapture(state.capturedPointerId);
+          } catch (_) {}
+        }
+        state.activeDragHandle = null;
+        state.capturedPointerId = null;
+        state.dragGrabOffset = 0;
+        renderScene();
+      }
+    }
+
+    window.addEventListener('pointermove', onGlobalPointerMove, { passive: false });
+    window.addEventListener('pointerup', onGlobalPointerEnd);
+    window.addEventListener('pointercancel', onGlobalPointerEnd);
+
+    const sceneWrapper = document.getElementById('scene-svg-wrapper');
+    if (sceneWrapper) {
+      sceneWrapper.addEventListener('lostpointercapture', onGlobalPointerEnd);
+    }
+
+    // Lock button
     const btnLock = document.getElementById('btn-lock-in');
     if (btnLock) {
       btnLock.addEventListener('click', () => {
@@ -1587,7 +1568,7 @@
       });
     }
 
-    // Next question button: Advances to next slot
+    // Next question button
     const btnNext = document.getElementById('btn-next-question');
     if (btnNext) {
       btnNext.addEventListener('click', () => {
@@ -1625,7 +1606,7 @@
       });
     });
 
-    // Custom True Answer Input & Button (Item in Test Controls)
+    // Custom True Answer Input & Button
     const testInput = document.getElementById('test-true-answer-input');
     const btnSetCustom = document.getElementById('btn-set-custom-answer');
     if (btnSetCustom && testInput) {
@@ -1673,7 +1654,7 @@
       });
     }
 
-    // Replay button (resets current question without advancing slot)
+    // Replay button
     const btnReplay = document.getElementById('btn-replay');
     if (btnReplay) {
       btnReplay.addEventListener('click', () => {
