@@ -153,11 +153,34 @@
   }
 
   /**
-   * Toast notification display
+   * Puzzle date in America/New_York timezone in M/D/YY format (e.g. 10/17/26)
+   */
+  function getNyPuzzleDateString() {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        month: 'numeric',
+        day: 'numeric',
+        year: '2-digit',
+      });
+      return formatter.format(new Date());
+    } catch (_) {
+      const d = new Date();
+      return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+    }
+  }
+
+  /**
+   * Status / Error notification notice
    */
   function showToast(message, duration = 3200) {
-    const toast = document.getElementById('game-toast');
-    if (!toast) return;
+    let toast = document.getElementById('game-toast-notice');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'game-toast-notice';
+      toast.className = 'toast-notice';
+      document.body.appendChild(toast);
+    }
 
     if (state.toastTimeout) {
       clearTimeout(state.toastTimeout);
@@ -165,14 +188,10 @@
     }
 
     toast.textContent = message;
-    toast.classList.remove('hidden');
-    toast.style.opacity = '1';
+    toast.classList.add('show');
 
     state.toastTimeout = setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => {
-        toast.classList.add('hidden');
-      }, 250);
+      toast.classList.remove('show');
     }, duration);
   }
 
@@ -501,6 +520,17 @@
     }
 
     state.question = q ? { ...q } : null;
+
+    // Update Line 1 date and Line 2 progress
+    const dateEl = document.getElementById('puzzle-date-display');
+    if (dateEl) {
+      dateEl.textContent = getNyPuzzleDateString();
+    }
+
+    const progressMetaEl = document.getElementById('question-progress-meta');
+    if (progressMetaEl) {
+      progressMetaEl.textContent = `Question ${state.currentSlot}/3`;
+    }
 
     const slotNumEl = document.getElementById('current-slot-num');
     if (slotNumEl) slotNumEl.textContent = state.currentSlot;
@@ -1042,7 +1072,6 @@
     const currentIndex = availableSlots.indexOf(state.currentSlot);
     const nextSlot = availableSlots[(currentIndex + 1) % availableSlots.length];
     setSlot(nextSlot, true);
-    showToast(`Slot ${nextSlot}: ${CONFIG.SLOTS[nextSlot] ? CONFIG.SLOTS[nextSlot].name : 'Question'}`);
   }
 
   /**
@@ -2012,6 +2041,10 @@
    * Initialize Game Engine
    */
   async function init() {
+    const dateEl = document.getElementById('puzzle-date-display');
+    if (dateEl) {
+      dateEl.textContent = getNyPuzzleDateString();
+    }
     applyPalette(state.currentPalette);
     initControls();
     await loadTodayQuestions();
