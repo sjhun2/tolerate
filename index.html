@@ -16,9 +16,40 @@
     <!-- Full-Screen Atmospheric Tint Overlay (Sunset warm tint / Night dark tint) -->
     <div class="fullscreen-tint-overlay" aria-hidden="true"></div>
 
-    <main class="game-viewport">
-      <!-- Top-Left Floating Test Panel: Small & anchored at the very top-left corner -->
-      <aside class="corner-test-panel" aria-label="Developer Preview Controls">
+    <!-- Toast Notification Banner for status/error feedback -->
+    <div id="game-toast" class="game-toast hidden" role="status" aria-live="polite"></div>
+
+    <!-- Milestone 4 Item 8: Loading Screen -->
+    <div id="app-loading-screen" class="app-fullscreen-screen" aria-live="polite">
+      <div class="app-screen-card">
+        <div class="brand-title brand-title-small">
+          <span>TOLERATE</span>
+          <span class="brand-dot" aria-hidden="true"></span>
+          <span>THE DEEP DROP</span>
+        </div>
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <h2 id="loading-screen-text" class="screen-heading">Loading today's questions...</h2>
+      </div>
+    </div>
+
+    <!-- Milestone 4 Item 4: Friendly Empty / Fallback Screen -->
+    <div id="app-empty-screen" class="app-fullscreen-screen hidden" aria-live="polite">
+      <div class="app-screen-card">
+        <div class="brand-title brand-title-small">
+          <span>TOLERATE</span>
+          <span class="brand-dot" aria-hidden="true"></span>
+          <span>THE DEEP DROP</span>
+        </div>
+        <div class="screen-icon" aria-hidden="true">🌉</div>
+        <h2 id="empty-screen-text" class="screen-heading">No questions today. Check back soon!</h2>
+        <button id="btn-empty-retry" type="button" class="btn-lock" style="margin-top: 18px; width: auto; padding: 10px 24px;">Retry</button>
+      </div>
+    </div>
+
+    <!-- Main Game Viewport -->
+    <main id="game-main-viewport" class="game-viewport">
+      <!-- Top-Left Floating Test Panel: Hidden unless CONFIG.TEST_MODE === true (Item 7) -->
+      <aside id="corner-test-panel" class="corner-test-panel hidden" aria-label="Developer Preview Controls">
         <button id="corner-test-toggle" type="button" class="corner-toggle-btn" title="Toggle Skies, Palettes and Test Answer">
           <span>⚙️ Theme</span>
         </button>
@@ -77,7 +108,7 @@
           <span>THE DEEP DROP</span>
         </div>
         <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
-        <h1 id="question-text-display" class="question-text">How tall is the Eiffel Tower, in feet?</h1>
+        <h1 id="question-text-display" class="question-text">Loading question...</h1>
       </header>
 
       <!-- Middle Canyon Playable Scene -->
@@ -94,11 +125,11 @@
               <div class="range-label-row">
                 <span class="range-label">Chosen Range</span>
               </div>
-              <span id="range-value-display" class="range-value">600 – 1,400 ft</span>
+              <span id="range-value-display" class="range-value">0 – 0</span>
             </div>
             <div class="multiplier-tag">
               <span class="multiplier-label">Multiplier</span>
-              <span id="multiplier-value-display" class="multiplier-badge-text">2.5x</span>
+              <span id="multiplier-value-display" class="multiplier-badge-text">1.0x</span>
             </div>
           </div>
 
@@ -111,20 +142,20 @@
         <div id="card-result-view" class="card-view hidden" aria-live="polite">
           <div class="result-header-row">
             <span id="result-status-badge" class="result-badge hit">HIT</span>
-            <span id="result-points-display" class="result-points-value">+250 pts</span>
+            <span id="result-points-display" class="result-points-value">+0 pts</span>
           </div>
           <div class="result-details-row">
             <div class="result-detail-item">
               <span class="result-detail-label">True Answer</span>
-              <span id="result-answer-display" class="result-detail-val">1,083 ft</span>
+              <span id="result-answer-display" class="result-detail-val">—</span>
             </div>
             <div class="result-detail-item">
               <span class="result-detail-label">Your Range</span>
-              <span id="result-range-display" class="result-detail-val">600 – 1,400 ft</span>
+              <span id="result-range-display" class="result-detail-val">—</span>
             </div>
             <div class="result-detail-item">
               <span class="result-detail-label">Multiplier</span>
-              <span id="result-multiplier-display" class="result-detail-val">2.5x</span>
+              <span id="result-multiplier-display" class="result-detail-val">—</span>
             </div>
           </div>
           <button id="btn-next-question" type="button" class="btn-lock btn-next" aria-label="Proceed to next question">
@@ -133,6 +164,9 @@
         </div>
       </section>
     </main>
+
+    <!-- Pinned Supabase JS CDN Library (Item 2: exact pinned version 2.45.4, > 2 weeks old) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
     <!-- Scripts -->
     <script src="./config.js"></script>
