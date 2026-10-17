@@ -2,8 +2,7 @@
  * Tolerate: The Deep Drop — Game Engine
  * File: game.js
  * Plain JavaScript (no build tools, no frameworks).
- * Milestone 3: Reveal animation, test data, hit/miss sequences, and result card.
- * Strap drag fix: Pointer capture, grab offset preservation, Y-movement agnostic.
+ * Milestone 4: Supabase Backend Integration (RPC get_today, submit_answer, anonymous auth).
  */
 
 (function () {
@@ -11,10 +10,12 @@
 
   // Game state
   const state = {
-    mode: 'calibrating', // 'calibrating' | 'locked' | 'revealing' | 'result'
+    mode: 'loading',     // 'loading' | 'calibrating' | 'locked' | 'revealing' | 'result'
     currentSlot: 1,      // 1: Day, 2: Sunset, 3: Night
     currentPalette: (typeof CONFIG !== 'undefined' && CONFIG.DEFAULT_PALETTE) || 'golden',
-    question: null,      // Loaded dynamically from CONFIG.TEST_QUESTIONS
+    questionsBySlot: {}, // Loaded dynamically from supabase.rpc('get_today')
+    question: null,      // Active question object
+    answeredSlots: new Set(), // Set of slots answered today
 
     // Range in scale units (rounded to step)
     currentLo: 600,
@@ -29,7 +30,7 @@
     capturedPointerId: null, // Active pointer ID for pointer capture
     toastTimeout: null,
 
-    // Milestone 3 Reveal Animation State
+    // Milestone 3 & 4 Reveal Animation State
     revealData: {
       jumperX: 0,
       jumperY: 146,
@@ -45,6 +46,7 @@
       mattressSquashing: false,
       mattressShake: false,
       scoreResult: null,
+      trueAnswer: null,      // ONLY populated once returned from backend
     },
 
     animationTimers: [],
@@ -54,13 +56,133 @@
    * Helper to format numbers with commas
    */
   function formatNum(val) {
-    return Math.round(val).toLocaleString('en-US');
+    if (val === undefined || val === null || isNaN(val)) return '—';
+    return Math.round(Number(val)).toLocaleString('en-US');
+  }
+
+  /**
+   * Initialize or retrieve Supabase client instance
+   */
+  let supabaseClient = null;
+  function getSupabase() {
+    if (supabaseClient) return supabaseClient;
+    if (typeof window !== 'undefined' && window.supabase && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
+      // Normalize URL: remove /rest/v1 or trailing slashes for standard client RPC/Auth
+      const rawUrl = CONFIG.SUPABASE_URL;
+      const baseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+      supabaseClient = window.supabase.createClient(baseUrl, CONFIG.SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+      });
+    }
+    return supabaseClient;
+  }
+
+  /**
+   * Milestone 4 Item 3:
+   * Anonymous Sign-In: Only sign in anonymously if there is no saved session.
+   * Supabase client automatically persists session in localStorage so the device keeps the same ID.
+   */
+  async function ensureAuthSession() {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      const { data: sessionData, error: sessionErr } = await client.auth.getSession();
+      if (sessionData && sessionData.session) {
+        return sessionData.session;
+      }
+      if (sessionErr) {
+        console.warn('Supabase getSession warning:', sessionErr);
+      }
+
+      // No saved session: sign in anonymously
+      const { data: anonData, error: anonErr } = await client.auth.signInAnonymously();
+      if (anonErr) {
+        console.warn('Supabase anonymous sign-in error:', anonErr);
+      }
+      return anonData ? anonData.session : null;
+    } catch (err) {
+      console.warn('Supabase auth exception:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Milestone 4 Item 8 & 4:
+   * Screen visibility helpers
+   */
+  function showLoadingScreen(show, text = "Loading today's questions...") {
+    const screen = document.getElementById('app-loading-screen');
+    const label = document.getElementById('loading-screen-text');
+    if (screen) {
+      if (show) {
+        if (label) label.textContent = text;
+        screen.classList.remove('hidden');
+      } else {
+        screen.classList.add('hidden');
+      }
+    }
+  }
+
+  function showEmptyScreen(message = "No questions today. Check back soon!") {
+    const screen = document.getElementById('app-empty-screen');
+    const label = document.getElementById('empty-screen-text');
+    if (screen) {
+      if (label) label.textContent = message;
+      screen.classList.remove('hidden');
+    }
+    const mainViewport = document.getElementById('game-main-viewport');
+    if (mainViewport) {
+      mainViewport.style.display = 'none';
+    }
+  }
+
+  function hideEmptyScreen() {
+    const screen = document.getElementById('app-empty-screen');
+    if (screen) {
+      screen.classList.add('hidden');
+    }
+    const mainViewport = document.getElementById('game-main-viewport');
+    if (mainViewport) {
+      mainViewport.style.display = '';
+    }
+  }
+
+  /**
+   * Toast notification display
+   */
+  function showToast(message, duration = 3200) {
+    const toast = document.getElementById('game-toast');
+    if (!toast) return;
+
+    if (state.toastTimeout) {
+      clearTimeout(state.toastTimeout);
+      state.toastTimeout = null;
+    }
+
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    toast.style.opacity = '1';
+
+    state.toastTimeout = setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 250);
+    }, duration);
   }
 
   /**
    * Helper: Get scale boundaries and type from question object
    */
   function getQuestionScale(q) {
+    if (!q) {
+      return { min: 0, max: 2000, type: 'linear', total: 2000 };
+    }
     const min = q.scaleMin !== undefined ? q.scaleMin : (q.scale_min !== undefined ? q.scale_min : 0);
     const max = q.scaleMax !== undefined ? q.scaleMax : (q.scale_max !== undefined ? q.scale_max : 2000);
     const type = q.scaleType || q.scale_type || 'linear';
@@ -108,8 +230,9 @@
   }
 
   /**
-   * Helper function 3:
-   * Computes score: { hit, multiplier, points } using multiplier formula and BASE_POINTS = 100.
+   * Helper function 3 (TEST_MODE only fallback):
+   * In Milestone 4, scores are computed by the Supabase backend RPC submit_answer.
+   * This formula is only kept for local offline testing when TEST_MODE === true.
    */
   function computeScore(lo, hi, trueAnswer) {
     const q = state.question;
@@ -129,8 +252,8 @@
     const multiplier = Math.pow(1 / fraction, exponent);
     const roundedMultiplier = Number(multiplier.toFixed(1));
 
-    const answer = trueAnswer !== undefined ? trueAnswer : (q.trueAnswer !== undefined ? q.trueAnswer : q.true_answer);
-    const hit = lo <= answer && answer <= hi;
+    const answer = trueAnswer !== undefined ? trueAnswer : (q && q.trueAnswer);
+    const hit = answer !== undefined ? (lo <= answer && answer <= hi) : false;
     const points = hit ? Math.round(basePoints * multiplier) : 0;
 
     return {
@@ -145,7 +268,7 @@
    */
   function calculateRangeValues() {
     const q = state.question;
-    const { min, max, total } = getQuestionScale(q);
+    const { total } = getQuestionScale(q);
     const step = total > 10000 ? 100 : 10;
     const lo = Math.round(state.currentLo / step) * step;
     const hi = Math.round(state.currentHi / step) * step;
@@ -282,6 +405,77 @@
   }
 
   /**
+   * Milestone 4 Item 4:
+   * Fetch today's questions by calling get_today() through supabase.rpc('get_today')
+   */
+  async function loadTodayQuestions() {
+    showLoadingScreen(true, "Loading today's questions...");
+    hideEmptyScreen();
+
+    // Ensure session is initialized
+    await ensureAuthSession();
+
+    let questions = null;
+    const client = getSupabase();
+
+    if (client) {
+      try {
+        const { data, error } = await client.rpc('get_today');
+        if (error) {
+          console.warn('supabase.rpc get_today error:', error);
+        } else if (Array.isArray(data) && data.length > 0) {
+          questions = data;
+        }
+      } catch (err) {
+        console.warn('Failed to call get_today RPC:', err);
+      }
+    }
+
+    // Item 4: If call fails or returns nothing, show friendly message.
+    // Do NOT fall back to hardcoded questions unless TEST_MODE is on.
+    if (!questions || questions.length === 0) {
+      if (CONFIG.TEST_MODE && CONFIG.TEST_QUESTIONS) {
+        // Fallback only permitted in TEST_MODE
+        state.questionsBySlot = { ...CONFIG.TEST_QUESTIONS };
+        showLoadingScreen(false);
+        setSlot(1, true);
+        return;
+      }
+
+      showLoadingScreen(false);
+      showEmptyScreen("No questions today. Check back soon!");
+      return;
+    }
+
+    // Map fetched questions by slot number
+    state.questionsBySlot = {};
+    questions.forEach(q => {
+      const slotNum = Number(q.slot);
+      state.questionsBySlot[slotNum] = {
+        id: q.id,
+        slot: slotNum,
+        text: q.question,
+        question: q.question,
+        unit: q.unit || '',
+        scaleMin: Number(q.scale_min),
+        scaleMax: Number(q.scale_max),
+        scaleType: q.scale_type || 'linear',
+        scale_min: Number(q.scale_min),
+        scale_max: Number(q.scale_max),
+        scale_type: q.scale_type || 'linear',
+        // True answer is deliberately not present here!
+      };
+    });
+
+    showLoadingScreen(false);
+
+    // Start with slot 1 if present, otherwise lowest slot
+    const slots = Object.keys(state.questionsBySlot).map(Number).sort((a, b) => a - b);
+    const initialSlot = slots.includes(1) ? 1 : slots[0];
+    setSlot(initialSlot, true);
+  }
+
+  /**
    * Set active sky slot and question (1 = Day, 2 = Sunset, 3 = Night)
    */
   function setSlot(slotNumber, resetRange = true) {
@@ -294,20 +488,35 @@
     root.style.setProperty('--tint-color', slotInfo.tintColor);
     root.style.setProperty('--tint-opacity', slotInfo.tintOpacity.toString());
 
-    const testQ = (CONFIG.TEST_QUESTIONS && CONFIG.TEST_QUESTIONS[state.currentSlot]) || CONFIG.QUESTION;
-    state.question = { ...testQ };
+    // Retrieve slot question
+    const q = state.questionsBySlot[state.currentSlot] ||
+              (CONFIG.TEST_MODE && CONFIG.TEST_QUESTIONS && CONFIG.TEST_QUESTIONS[state.currentSlot]) ||
+              null;
+
+    if (!q) {
+      if (!CONFIG.TEST_MODE) {
+        showEmptyScreen("No questions today. Check back soon!");
+        return;
+      }
+    }
+
+    state.question = q ? { ...q } : null;
 
     const slotNumEl = document.getElementById('current-slot-num');
     if (slotNumEl) slotNumEl.textContent = state.currentSlot;
 
     const qTextEl = document.getElementById('question-text-display');
-    if (qTextEl) qTextEl.textContent = state.question.text;
+    if (qTextEl && state.question) {
+      qTextEl.textContent = state.question.text || state.question.question || '';
+    }
 
     const testInput = document.getElementById('test-true-answer-input');
-    if (testInput) testInput.value = state.question.trueAnswer;
+    if (testInput && state.question && state.question.trueAnswer) {
+      testInput.value = state.question.trueAnswer;
+    }
 
-    if (resetRange) {
-      const { min, max, total } = getQuestionScale(state.question);
+    if (resetRange && state.question) {
+      const { min, total } = getQuestionScale(state.question);
       const step = total > 10000 ? 100 : 10;
       state.currentLo = Math.round((min + total * 0.30) / step) * step;
       state.currentHi = Math.round((min + total * 0.70) / step) * step;
@@ -325,6 +534,7 @@
     state.revealData.jumperOpacity = 1;
     state.revealData.jumperScaleRatio = 1;
     state.revealData.isWalking = false;
+    state.revealData.trueAnswer = null;
 
     showCardView('calibrating');
 
@@ -349,7 +559,10 @@
     } else {
       if (calView) calView.classList.remove('hidden');
       if (resView) resView.classList.add('hidden');
-      if (btnLock) btnLock.disabled = false;
+      if (btnLock) {
+        btnLock.disabled = false;
+        btnLock.textContent = 'Lock it in';
+      }
     }
   }
 
@@ -371,7 +584,7 @@
    * Update range by value with constraint enforcement
    */
   function setHandleValue(handle, targetValue) {
-    if (state.mode !== 'calibrating') return;
+    if (state.mode !== 'calibrating' || !state.question) return;
 
     const { min, max, total } = getQuestionScale(state.question);
     const minWidth = Math.round(total * CONFIG.MIN_WIDTH_RATIO);
@@ -396,7 +609,7 @@
    * 3. Respects all scale and min-width limits.
    */
   function updateFromPointer(clientX) {
-    if (state.mode !== 'calibrating' || !state.activeDragHandle) return;
+    if (state.mode !== 'calibrating' || !state.activeDragHandle || !state.question) return;
 
     const layout = computeSceneLayout();
     const svgCoords = screenToSvgCoords(clientX, 0);
@@ -448,49 +661,29 @@
         <rect x="${-2.5 * scale}" y="${-8 * scale}" width="${5 * scale}" height="${8 * scale}" fill="#4A331E" rx="1" />
         <path d="M ${-halfW} ${-7 * scale} L ${halfW} ${-7 * scale} L ${halfW * 0.7} ${-19 * scale} L ${halfW * 0.85} ${-19 * scale} L 0 ${-34 * scale} L ${-halfW * 0.85} ${-19 * scale} L ${-halfW * 0.7} ${-19 * scale} Z" fill="${fill}" />
         <path d="M ${-halfW * 0.65} ${-22 * scale} L ${halfW * 0.65} ${-22 * scale} L 0 ${-h} Z" fill="${fill}" />
-        <path d="M 0 ${-h} L ${halfW * 0.65} ${-22 * scale} L 0 ${-22 * scale} Z" fill="rgba(255,255,255,0.12)" />
       </g>
     `;
   }
 
   /**
-   * Show friendly Milestone Toast Notice
+   * Milestone 4 Items 5 & 6:
+   * Submit answer to backend and launch reveal sequence
    */
-  function showToast(message) {
-    let toast = document.getElementById('milestone-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'milestone-toast';
-      toast.className = 'toast-notice';
-      document.body.appendChild(toast);
-    }
+  async function submitAndReveal() {
+    if (state.mode !== 'calibrating' || !state.question) return;
 
-    toast.textContent = message;
-    toast.classList.add('show');
-
-    if (state.toastTimeout) {
-      clearTimeout(state.toastTimeout);
-    }
-
-    state.toastTimeout = setTimeout(() => {
-      toast.classList.remove('show');
-    }, 2800);
-  }
-
-  /**
-   * Start Reveal Sequence (Milestone 3)
-   */
-  function startRevealSequence() {
-    if (state.mode !== 'calibrating') return;
-
-    clearAllAnimationTimers();
+    // 1. Lock straps & disable button
     state.mode = 'locked';
+    state.activeDragHandle = null;
+    state.capturedPointerId = null;
 
-    // Disable lock button
     const btnLock = document.getElementById('btn-lock-in');
-    if (btnLock) btnLock.disabled = true;
+    if (btnLock) {
+      btnLock.disabled = true;
+      btnLock.textContent = 'Locking in...';
+    }
 
-    // Quick little shake on mattress assembly (0.3s)
+    // Quick little strap shake
     state.revealData.mattressShake = true;
     renderScene();
 
@@ -499,11 +692,120 @@
       renderScene();
     }, 320);
 
+    // Range rounded to nearest 10 (Item 5)
+    const roundedLo = Math.round(state.currentLo / 10) * 10;
+    const roundedHi = Math.round(state.currentHi / 10) * 10;
+
+    let submitResult = null;
+    let submitError = null;
+
+    const client = getSupabase();
+    if (client) {
+      try {
+        const { data, error } = await client.rpc('submit_answer', {
+          p_question_id: state.question.id,
+          p_lo: roundedLo,
+          p_hi: roundedHi,
+          p_client_version: CONFIG.CLIENT_VERSION,
+        });
+
+        if (error) {
+          submitError = error;
+        } else {
+          submitResult = Array.isArray(data) ? data[0] : data;
+        }
+      } catch (err) {
+        submitError = err;
+      }
+    } else if (CONFIG.TEST_MODE) {
+      // Offline fallback only for TEST_MODE
+      const mockAns = state.question.trueAnswer !== undefined ? state.question.trueAnswer : 1083;
+      const mockScore = computeScore(roundedLo, roundedHi, mockAns);
+      submitResult = {
+        answer: mockAns,
+        was_hit: mockScore.hit,
+        mult: mockScore.multiplier,
+        points: mockScore.points,
+      };
+    }
+
+    // Milestone 4 Item 6: Error handling
+    if (submitError) {
+      const errMsg = (submitError.message || submitError.details || submitError.hint || '').toLowerCase();
+
+      if (errMsg.includes('already answered')) {
+        // Friendly notice and advance to next unanswered slot
+        showToast('You already played this question today');
+        state.answeredSlots.add(state.currentSlot);
+        moveToNextUnansweredSlot();
+        return;
+      }
+
+      // Any other error: show error and let user press Lock it in again
+      showToast('Something went wrong. Please try again.');
+      state.mode = 'calibrating';
+      if (btnLock) {
+        btnLock.disabled = false;
+        btnLock.textContent = 'Lock it in';
+      }
+      renderScene();
+      return;
+    }
+
+    if (!submitResult || submitResult.answer === undefined) {
+      showToast('Something went wrong. Please try again.');
+      state.mode = 'calibrating';
+      if (btnLock) {
+        btnLock.disabled = false;
+        btnLock.textContent = 'Lock it in';
+      }
+      renderScene();
+      return;
+    }
+
+    // Mark current slot as played today
+    state.answeredSlots.add(state.currentSlot);
+
+    // Parse returned backend payload (Do NOT calculate score in browser)
+    const trueAns = Number(submitResult.answer);
+    const wasHit = Boolean(submitResult.was_hit);
+    const multiplier = typeof submitResult.mult === 'number' ? submitResult.mult : Number(parseFloat(submitResult.mult).toFixed(1));
+    const points = Number(submitResult.points);
+
+    const scoreResult = {
+      hit: wasHit,
+      multiplier,
+      points,
+    };
+
+    state.revealData.scoreResult = scoreResult;
+    state.revealData.trueAnswer = trueAns;
+
+    // Start visual reveal sequence
+    executeRevealSequence(trueAns, scoreResult);
+  }
+
+  /**
+   * Move on to next unanswered slot (Item 6)
+   */
+  function moveToNextUnansweredSlot() {
+    const allSlots = [1, 2, 3];
+    const available = allSlots.filter(s => state.questionsBySlot[s]);
+    const unanswered = available.find(s => !state.answeredSlots.has(s) && s !== state.currentSlot);
+
+    if (unanswered) {
+      setSlot(unanswered, true);
+    } else {
+      advanceToNextQuestion();
+    }
+  }
+
+  /**
+   * Execute walking, fall, hit/miss reveal animations
+   */
+  function executeRevealSequence(trueAns, scoreResult) {
     const layout = computeSceneLayout();
     const rangeData = calculateRangeValues();
-    const trueAns = state.question.trueAnswer;
-    const score = computeScore(state.currentLo, state.currentHi, trueAns);
-    state.revealData.scoreResult = score;
 
     const startX = (numberToCanyonX(state.currentLo, layout) + numberToCanyonX(state.currentHi, layout)) / 2;
     const targetX = numberToCanyonX(trueAns, layout);
@@ -517,7 +819,7 @@
       state.revealData.markerX = targetX;
       state.revealData.markerValue = trueAns;
 
-      if (score.hit) {
+      if (scoreResult.hit) {
         state.revealData.jumperY = CONFIG.CANVAS.MATTRESS_Y - 14;
         state.revealData.emotion = 'relieved';
         state.revealData.speechBubble = { text: 'Whew!', type: 'hit' };
@@ -529,7 +831,7 @@
       }
 
       renderScene();
-      populateResultCard(score, rangeData);
+      populateResultCard(scoreResult, rangeData, trueAns);
       showCardView('result');
       return;
     }
@@ -572,7 +874,7 @@
         renderScene();
 
         addTimer(() => {
-          startFall(targetX, score, rangeData);
+          startFall(targetX, scoreResult, rangeData, trueAns);
         }, 1000);
       }
     }
@@ -583,7 +885,7 @@
   /**
    * Accelerating Fall Phase
    */
-  function startFall(fallX, score, rangeData) {
+  function startFall(fallX, scoreResult, rangeData, trueAns) {
     if (state.mode !== 'revealing') return;
 
     const bridgeY = CONFIG.CANVAS.BRIDGE_Y;
@@ -591,10 +893,10 @@
     const fallDuration = 1.2;
     const fallStartTime = performance.now();
 
-    const targetY = score.hit ? (mattressY - 14) : 480;
+    const targetY = scoreResult.hit ? (mattressY - 14) : 480;
 
-    state.revealData.emotion = score.hit ? 'panic' : 'screaming';
-    if (!score.hit) {
+    state.revealData.emotion = scoreResult.hit ? 'panic' : 'screaming';
+    if (!scoreResult.hit) {
       state.revealData.speechBubble = { text: 'AAHHHH!', type: 'miss' };
     }
     renderScene();
@@ -608,7 +910,7 @@
 
       state.revealData.jumperY = currentY;
 
-      if (!score.hit && progress > 0.4) {
+      if (!scoreResult.hit && progress > 0.4) {
         const fadeProgress = (progress - 0.4) / 0.6;
         state.revealData.jumperOpacity = Math.max(0, 1 - fadeProgress);
         state.revealData.jumperScaleRatio = Math.max(0.68, 1 - fadeProgress * 0.32);
@@ -628,10 +930,10 @@
       if (rawProgress < 1) {
         requestAnimationFrame(stepFall);
       } else {
-        if (score.hit) {
-          onHitLanded(fallX, score, rangeData);
+        if (scoreResult.hit) {
+          onHitLanded(fallX, scoreResult, rangeData, trueAns);
         } else {
-          onMissFinished(score, rangeData);
+          onMissFinished(scoreResult, rangeData, trueAns);
         }
       }
     }
@@ -639,7 +941,7 @@
     requestAnimationFrame(stepFall);
   }
 
-  function onHitLanded(fallX, score, rangeData) {
+  function onHitLanded(fallX, scoreResult, rangeData, trueAns) {
     state.revealData.mattressSquashing = true;
     state.revealData.emotion = 'relieved';
     state.revealData.speechBubble = { text: 'Whew!', type: 'hit' };
@@ -658,24 +960,24 @@
 
     addTimer(() => {
       state.mode = 'result';
-      populateResultCard(score, rangeData);
+      populateResultCard(scoreResult, rangeData, trueAns);
       showCardView('result');
-      animatePointsCountUp(score.points);
+      animatePointsCountUp(scoreResult.points);
     }, 700);
   }
 
-  function onMissFinished(score, rangeData) {
+  function onMissFinished(scoreResult, rangeData, trueAns) {
     state.revealData.speechBubble = { text: 'BUST · 0 pts', type: 'miss' };
     renderScene();
 
     addTimer(() => {
       state.mode = 'result';
-      populateResultCard(score, rangeData);
+      populateResultCard(scoreResult, rangeData, trueAns);
       showCardView('result');
     }, 750);
   }
 
-  function populateResultCard(score, rangeData) {
+  function populateResultCard(scoreResult, rangeData, trueAns) {
     const badge = document.getElementById('result-status-badge');
     const pointsEl = document.getElementById('result-points-display');
     const ansEl = document.getElementById('result-answer-display');
@@ -683,25 +985,25 @@
     const multEl = document.getElementById('result-multiplier-display');
 
     if (badge) {
-      badge.textContent = score.hit ? 'HIT' : 'BUST';
-      badge.className = `result-badge ${score.hit ? 'hit' : 'bust'}`;
+      badge.textContent = scoreResult.hit ? 'HIT' : 'BUST';
+      badge.className = `result-badge ${scoreResult.hit ? 'hit' : 'bust'}`;
     }
 
     if (pointsEl) {
-      pointsEl.textContent = score.hit ? `+${formatNum(score.points)} pts` : '0 pts';
-      pointsEl.className = `result-points-value ${score.hit ? 'hit' : 'bust'}`;
+      pointsEl.textContent = scoreResult.hit ? `+${formatNum(scoreResult.points)} pts` : '0 pts';
+      pointsEl.className = `result-points-value ${scoreResult.hit ? 'hit' : 'bust'}`;
     }
 
-    if (ansEl) {
-      ansEl.textContent = `${formatNum(state.question.trueAnswer)} ${state.question.unit}`;
+    if (ansEl && state.question) {
+      ansEl.textContent = `${formatNum(trueAns)} ${state.question.unit || ''}`;
     }
 
-    if (rangeEl) {
-      rangeEl.textContent = `${formatNum(rangeData.lo)} – ${formatNum(rangeData.hi)} ${state.question.unit}`;
+    if (rangeEl && state.question) {
+      rangeEl.textContent = `${formatNum(rangeData.lo)} – ${formatNum(rangeData.hi)} ${state.question.unit || ''}`;
     }
 
     if (multEl) {
-      multEl.textContent = `${rangeData.multiplier}x`;
+      multEl.textContent = `${scoreResult.multiplier}x`;
     }
   }
 
@@ -729,9 +1031,18 @@
   }
 
   function advanceToNextQuestion() {
-    const nextSlot = (state.currentSlot % 3) + 1;
+    const allSlots = [1, 2, 3];
+    const availableSlots = allSlots.filter(s => state.questionsBySlot[s]);
+
+    if (availableSlots.length === 0) {
+      setSlot((state.currentSlot % 3) + 1, true);
+      return;
+    }
+
+    const currentIndex = availableSlots.indexOf(state.currentSlot);
+    const nextSlot = availableSlots[(currentIndex + 1) % availableSlots.length];
     setSlot(nextSlot, true);
-    showToast(`Question ${nextSlot} of 3`);
+    showToast(`Slot ${nextSlot}: ${CONFIG.SLOTS[nextSlot] ? CONFIG.SLOTS[nextSlot].name : 'Question'}`);
   }
 
   /**
@@ -740,6 +1051,11 @@
   function renderScene() {
     const container = document.getElementById('scene-svg-wrapper');
     if (!container) return;
+
+    if (!state.question) {
+      container.innerHTML = '';
+      return;
+    }
 
     const layout = computeSceneLayout();
     const vw = layout.vw;
@@ -987,19 +1303,20 @@
     `;
 
     // Scale Number Labels
+    const unitStr = state.question.unit ? ` ${state.question.unit}` : '';
     const scaleEndpointLabels = `
       <g id="scale-endpoint-labels" font-family="'Fredoka', system-ui, sans-serif" font-size="11" font-weight="700">
         <g transform="translate(${leftScaleLabelX}, ${bridgeRopeTopY - 14})">
           <rect x="-24" y="-9" width="48" height="18" rx="9" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
           <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
-            ${formatNum(min)} ${state.question.unit}
+            ${formatNum(min)}${unitStr}
           </text>
         </g>
 
         <g transform="translate(${rightScaleLabelX}, ${bridgeRopeTopY - 14})">
           <rect x="-30" y="-9" width="60" height="18" rx="9" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.2" filter="url(#softShadow)" />
           <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="${pal.deepGreen}">
-            ${formatNum(max)} ${state.question.unit}
+            ${formatNum(max)}${unitStr}
           </text>
         </g>
       </g>
@@ -1104,76 +1421,57 @@
                   <!-- MOOD 2: NERVOUS -->
                   <g class="mood-layer mood-layer-nervous">
                     <g class="darting-pupils-group">
-                      <circle class="darting-pupil" cx="-3.3" cy="-33.2" r="1.15" fill="#1A2126" />
-                      <circle class="darting-pupil" cx="3.3" cy="-33.2" r="1.15" fill="#1A2126" />
+                      <circle cx="-3.3" cy="-33.2" r="1.4" fill="#161B1E" />
+                      <circle cx="3.3" cy="-33.2" r="1.4" fill="#161B1E" />
+                      <circle cx="-3.8" cy="-33.6" r="0.45" fill="#FFFFFF" />
+                      <circle cx="2.8" cy="-33.6" r="0.45" fill="#FFFFFF" />
                     </g>
-                    <line x1="-5.2" y1="-36.4" x2="-2.0" y2="-37.3" stroke="#1A2126" stroke-width="0.8" stroke-linecap="round" />
-                    <line x1="5.2" y1="-36.4" x2="2.0" y2="-37.3" stroke="#1A2126" stroke-width="0.8" stroke-linecap="round" />
-                    <line x1="-2.3" y1="-29.2" x2="2.3" y2="-29.2" stroke="#8E3C18" stroke-width="0.95" stroke-linecap="round" />
-                    <g class="clasped-hands-group">
-                      <path d="M -6.8 -27.5 Q -4 -22 -1 -22" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                      <path d="M 6.8 -27.5 Q 4 -22 1 -22" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                      <ellipse cx="0" cy="-22" rx="2.2" ry="1.6" fill="#E2A684" stroke="#8E3C18" stroke-width="0.5" />
-                    </g>
-                    <path class="sweat-drop sweat-drop-nervous-1" d="M -8.2 -36.5 Q -9.4 -34.5 -8.2 -33.5 Q -7 -34.5 -8.2 -36.5 Z" fill="#64B5F6" />
-                    <path class="sweat-drop sweat-drop-nervous-2" d="M 8.2 -37.5 Q 9.4 -35.5 8.2 -34.5 Q 7 -35.5 8.2 -37.5 Z" fill="#64B5F6" />
-                    <path class="sweat-drop sweat-drop-nervous-3" d="M -7.2 -31.5 Q -8.2 -29.8 -7.2 -29.0 Q -6.2 -29.8 -7.2 -31.5 Z" fill="#64B5F6" />
+                    <path d="M -2.8 -28.2 Q -1.4 -29.4 0 -28.2 Q 1.4 -27 2.8 -28.2" stroke="#8E3C18" stroke-width="1.0" fill="none" stroke-linecap="round" />
+                    <path d="M -6.8 -27.5 Q -4 -23 -3.5 -18" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path d="M 6.8 -27.5 Q 4 -23 3.5 -18" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-3.5" cy="-17.5" r="1.4" fill="#E2A684" />
+                    <circle cx="3.5" cy="-17.5" r="1.4" fill="#E2A684" />
+                    <path class="sweat-drop-nervous-1" d="M 7.8 -33 Q 9.2 -31 8.8 -29.5 Q 8.4 -28.2 7 -29.5 Z" fill="#64B5F6" />
+                    <path class="sweat-drop-nervous-2" d="M 6.5 -35 Q 7.8 -33.5 7.4 -32 Q 7 -31 6 -32 Z" fill="#64B5F6" />
+                    <path class="sweat-drop-nervous-3" d="M -7.8 -32 Q -9.2 -30 -8.8 -28.5 Q -8.4 -27.2 -7 -28.5 Z" fill="#64B5F6" />
                   </g>
 
                   <!-- MOOD 3: PANIC -->
                   <g class="mood-layer mood-layer-panic">
-                    <circle cx="-3.3" cy="-33.2" r="0.75" fill="#000000" />
-                    <circle cx="3.3" cy="-33.2" r="0.75" fill="#000000" />
-                    <path d="M -5.2 -37.8 Q -3.3 -39.4 -1.5 -37.6" stroke="#1A2126" stroke-width="0.95" fill="none" stroke-linecap="round" />
-                    <path d="M 5.2 -37.8 Q 3.3 -39.4 1.5 -37.6" stroke="#1A2126" stroke-width="0.95" fill="none" stroke-linecap="round" />
-                    <g class="panic-mouth-group">
-                      <ellipse class="panic-mouth-shape" cx="0" cy="-29.2" rx="1.9" ry="2.3" fill="#360800" stroke="#7A1800" stroke-width="0.7" />
-                      <path d="M -1.2 -29.8 Q 0 -30.6 1.2 -29.8" stroke="#FFFFFF" stroke-width="0.7" fill="none" stroke-linecap="round" />
-                      <ellipse cx="0" cy="-27.9" rx="1.1" ry="0.8" fill="#E84855" />
-                    </g>
-                    <g class="flailing-arm-left">
-                      <path d="M -6.8 -27.5 Q -10 -34 -8 -39" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                      <circle cx="-8" cy="-39" r="1.5" fill="#E2A684" />
-                    </g>
-                    <g class="flailing-arm-right">
-                      <path d="M 6.8 -27.5 Q 10 -34 8 -39" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                      <circle cx="8" cy="-39" r="1.5" fill="#E2A684" />
-                    </g>
-                    <path class="sweat-drop panic-sweat-right" d="M 9.5 -37 Q 12 -39 13.5 -36 Q 11 -35 9.5 -37 Z" fill="#4FC3F7" />
-                    <path class="sweat-drop panic-sweat-left" d="M -9.5 -37 Q -12 -39 -13.5 -36 Q -11 -35 -9.5 -37 Z" fill="#4FC3F7" />
-                    <g class="shake-lines" stroke="#3D2012" stroke-width="0.8" stroke-linecap="round">
-                      <line x1="-11" y1="-26" x2="-9" y2="-25" />
-                      <line x1="-11.5" y1="-21" x2="-9.5" y2="-21" />
-                      <line x1="11" y1="-26" x2="9" y2="-25" />
-                      <line x1="11.5" y1="-21" x2="9.5" y2="-21" />
-                    </g>
+                    <circle cx="-3.3" cy="-33.2" r="0.75" fill="#161B1E" />
+                    <circle cx="3.3" cy="-33.2" r="0.75" fill="#161B1E" />
+                    <ellipse cx="0" cy="-28" rx="2.4" ry="3.2" fill="#2E1108" stroke="#8E3C18" stroke-width="0.8" />
+                    <path d="M -1.4 -29.8 Q 0 -29.2 1.4 -29.8" stroke="#FFFFFF" stroke-width="0.8" fill="none" />
+                    <path d="M -6.8 -27.5 Q -9 -34 -6.2 -38" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path d="M 6.8 -27.5 Q 9 -34 6.2 -38" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-6.2" cy="-38.5" r="1.5" fill="#E2A684" />
+                    <circle cx="6.2" cy="-38.5" r="1.5" fill="#E2A684" />
+                    <path class="panic-sweat-right" d="M 7.8 -36 Q 10.5 -34 9.5 -32 Q 8.5 -30 6.8 -32 Z" fill="#42A5F5" />
+                    <path class="panic-sweat-left" d="M -7.8 -36 Q -10.5 -34 -9.5 -32 Q -8.5 -30 -6.8 -32 Z" fill="#42A5F5" />
                   </g>
 
                   <!-- MOOD 4: RELIEVED -->
                   <g class="mood-layer mood-layer-relieved">
-                    <path d="M -4.8 -32.8 Q -3.3 -35 -1.8 -32.8" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
-                    <path d="M 1.8 -32.8 Q 3.3 -35 4.8 -32.8" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
-                    <path d="M -2.8 -29.2 Q 0 -26.2 2.8 -29.2" stroke="#8E3C18" stroke-width="1.1" fill="#FFE2C6" stroke-linecap="round" />
-                    <path class="chill-arm-left" d="M -6.8 -27.5 Q -10 -25 -11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <path class="chill-arm-right" d="M 6.8 -27.5 Q 10 -25 11 -20" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <circle cx="-11" cy="-19.5" r="1.4" fill="#E2A684" />
-                    <circle cx="11" cy="-19.5" r="1.4" fill="#E2A684" />
+                    <path d="M -4.8 -33 Q -3.3 -35 -1.8 -33" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
+                    <path d="M 1.8 -33 Q 3.3 -35 4.8 -33" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
+                    <path d="M -2.8 -28.5 Q 0 -25.5 2.8 -28.5" stroke="#8E3C18" stroke-width="1.2" fill="none" stroke-linecap="round" />
+                    <path d="M -6.8 -27.5 Q -9 -21 -7 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path d="M 6.8 -27.5 Q 9 -21 7 -16" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-7" cy="-15.5" r="1.4" fill="#E2A684" />
+                    <circle cx="7" cy="-15.5" r="1.4" fill="#E2A684" />
                   </g>
 
                   <!-- MOOD 5: SCREAMING -->
                   <g class="mood-layer mood-layer-screaming">
-                    <circle cx="-3.3" cy="-33.2" r="0.65" fill="#000000" />
-                    <circle cx="3.3" cy="-33.2" r="0.65" fill="#000000" />
-                    <path d="M -5.5 -38.5 Q -3.3 -40.5 -1.2 -38.5" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
-                    <path d="M 5.5 -38.5 Q 3.3 -40.5 1.2 -38.5" stroke="#1A2126" stroke-width="1.1" fill="none" stroke-linecap="round" />
-                    <ellipse cx="0" cy="-28.8" rx="2.4" ry="3.2" fill="#2B0500" stroke="#7A1800" stroke-width="0.8" />
-                    <ellipse cx="0" cy="-27.2" rx="1.4" ry="1.0" fill="#E84855" />
-                    <path d="M -6.8 -27.5 Q -11 -35 -9 -41" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <path d="M 6.8 -27.5 Q 11 -35 8 -41" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
-                    <circle cx="-9" cy="-41" r="1.5" fill="#E2A684" />
-                    <circle cx="8" cy="-41" r="1.5" fill="#E2A684" />
+                    <circle cx="-3.3" cy="-33.2" r="0.6" fill="#161B1E" />
+                    <circle cx="3.3" cy="-33.2" r="0.6" fill="#161B1E" />
+                    <ellipse cx="0" cy="-27.5" rx="3.2" ry="4.5" fill="#2E0E05" stroke="#9E3011" stroke-width="0.9" />
+                    <path d="M -2 -29.5 Q 0 -28.8 2 -29.5" stroke="#FFFFFF" stroke-width="0.9" fill="none" />
+                    <path d="M -6.8 -26 Q -10 -34 -8 -42" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <path d="M 6.8 -26 Q 10 -34 8 -42" stroke="${pal.accentOrange}" stroke-width="2.7" stroke-linecap="round" fill="none" />
+                    <circle cx="-8" cy="-42.5" r="1.5" fill="#E2A684" />
+                    <circle cx="8" cy="-42.5" r="1.5" fill="#E2A684" />
                   </g>
-
                 </g>
               </g>
             </g>
@@ -1183,113 +1481,144 @@
       </g>
     `;
 
-    // 7. Mattress & Draggable Straps
-    let mattressTufts = '';
-    if (matWidth > 20) {
-      const tuftSpacing = 14;
-      const count = Math.min(18, Math.floor((matWidth - 12) / tuftSpacing));
-      const startX = matCenter - ((count - 1) * tuftSpacing) / 2;
+    // 7. Suspension Cables
+    const cables = `
+      <g id="suspension-cables-assembly">
+        <line x1="${canyonLeft}" y1="${bridgeY + 3}" x2="${matLeft}" y2="${strapTopY}" stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round" opacity="0.92" />
+        <line x1="${canyonRight}" y1="${bridgeY + 3}" x2="${matRight}" y2="${strapTopY}" stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round" opacity="0.92" />
+      </g>
+    `;
 
-      for (let i = 0; i < count; i++) {
-        const bx = startX + i * tuftSpacing;
-        mattressTufts += `
-          <circle cx="${bx}" cy="${mattressY + 9.5}" r="0.9" fill="#9EAAB2" />
-        `;
-      }
+    // 8. Mattress Body & Straps
+    const squashScaleY = state.revealData.mattressSquashing ? '0.85' : '1.0';
+    const mattressTransformOrigin = `${matCenter}px ${mattressY + mattressHeight}px`;
+
+    const quiltTuftsCount = Math.max(3, Math.min(22, Math.floor(matWidth / 18)));
+    let quiltTuftsSvg = '';
+    for (let i = 1; i < quiltTuftsCount; i++) {
+      const tx = matLeft + (i / quiltTuftsCount) * matWidth;
+      const ty1 = mattressY + 6;
+      const ty2 = mattressY + mattressHeight - 6;
+      quiltTuftsSvg += `
+        <circle cx="${tx}" cy="${ty1}" r="1.1" fill="#B0BCC5" />
+        <circle cx="${tx}" cy="${ty2}" r="1.1" fill="#B0BCC5" />
+      `;
     }
 
-    // Suspension cables
-    const cables = `
-      <g stroke="${pal.cables}" stroke-width="1.8" stroke-linecap="round">
-        <line x1="${canyonLeft}" y1="210" x2="${strapLeftCenterX}" y2="${strapTopY}" />
-        <line x1="${canyonRight}" y1="210" x2="${strapRightCenterX}" y2="${strapTopY}" />
-      </g>
-      <circle cx="${canyonLeft}" cy="210" r="3.5" fill="#3D4A47" />
-      <circle cx="${canyonRight}" cy="210" r="3.5" fill="#3D4A47" />
-    `;
-
-    const isLocked = state.mode !== 'calibrating';
-    const straps = `
-      <!-- Left Draggable Strap Handle -->
-      <g
-        id="handle-left"
-        class="handle-group ${state.activeDragHandle === 'left' ? 'dragging' : ''} ${isLocked ? 'locked' : ''}"
-        tabindex="${isLocked ? '-1' : '0'}"
-        role="slider"
-        aria-label="Lower range boundary handle"
-        aria-valuemin="${min}"
-        aria-valuemax="${state.currentHi - Math.round((max - min) * CONFIG.MIN_WIDTH_RATIO)}"
-        aria-valuenow="${rangeData.lo}"
-        aria-valuetext="${formatNum(rangeData.lo)} ${state.question.unit}"
-      >
-        <circle class="handle-focus-ring" cx="${strapLeftCenterX}" cy="${mattressY + mattressHeight / 2}" r="20" fill="none" stroke="${pal.deepGreen}" stroke-width="2" stroke-dasharray="3,3" />
-        <!-- 44px Hitbox -->
-        <rect x="${strapLeftCenterX - 38}" y="${mattressY - 12}" width="44" height="${mattressHeight + 24}" fill="transparent" pointer-events="all" />
-        <rect x="${strapLeftCenterX - 2.5}" y="${strapTopY}" width="5" height="3" rx="0.8" fill="none" stroke="${pal.buckle}" stroke-width="1.1" />
-        <rect x="${strapLeftCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.6" />
-        <line x1="${strapLeftCenterX}" y1="${strapTopY + 1}" x2="${strapLeftCenterX}" y2="${strapBottomY - 1}" stroke="${pal.strapStitch}" stroke-width="0.7" stroke-dasharray="2,1.2" />
-      </g>
-
-      <!-- Right Draggable Strap Handle -->
-      <g
-        id="handle-right"
-        class="handle-group ${state.activeDragHandle === 'right' ? 'dragging' : ''} ${isLocked ? 'locked' : ''}"
-        tabindex="${isLocked ? '-1' : '0'}"
-        role="slider"
-        aria-label="Upper range boundary handle"
-        aria-valuemin="${state.currentLo + Math.round((max - min) * CONFIG.MIN_WIDTH_RATIO)}"
-        aria-valuemax="${max}"
-        aria-valuenow="${rangeData.hi}"
-        aria-valuetext="${formatNum(rangeData.hi)} ${state.question.unit}"
-      >
-        <circle class="handle-focus-ring" cx="${strapRightCenterX}" cy="${mattressY + mattressHeight / 2}" r="20" fill="none" stroke="${pal.deepGreen}" stroke-width="2" stroke-dasharray="3,3" />
-        <!-- 44px Hitbox -->
-        <rect x="${strapRightCenterX - 6}" y="${mattressY - 12}" width="44" height="${mattressHeight + 24}" fill="transparent" pointer-events="all" />
-        <rect x="${strapRightCenterX - 2.5}" y="${strapTopY}" width="5" height="3" rx="0.8" fill="none" stroke="${pal.buckle}" stroke-width="1.1" />
-        <rect x="${strapRightCenterX - (strapWidth / 2)}" y="${strapTopY}" width="${strapWidth}" height="${strapH}" rx="1" fill="${pal.accentOrange}" stroke="#9C2E0B" stroke-width="0.6" />
-        <line x1="${strapRightCenterX}" y1="${strapTopY + 1}" x2="${strapRightCenterX}" y2="${strapBottomY - 1}" stroke="${pal.strapStitch}" stroke-width="0.7" stroke-dasharray="2,1.2" />
-      </g>
-    `;
-
-    const shakeClass = state.revealData.mattressShake ? 'straps-locked-shake' : '';
-    const squashClass = state.revealData.mattressSquashing ? 'mattress-squash' : '';
-
     const mattress = `
-      <g id="mattress-assembly" class="${shakeClass} ${squashClass}" filter="url(#softShadow)">
-        <rect x="${matLeft}" y="${mattressY + mattressHeight - 4}" width="${matWidth}" height="4" rx="0.8" fill="url(#boxSpringGrad)" stroke="#9CA7AF" stroke-width="0.7" />
-        <rect x="${matLeft}" y="${mattressY}" width="${matWidth}" height="${mattressHeight - 3}" rx="${Math.min(3, Math.max(1, matWidth / 2))}" fill="url(#mattressThickGrad)" stroke="${pal.mattressOutline}" stroke-width="1.1" />
+      <g
+        id="mattress-assembly"
+        class="${state.revealData.mattressShake ? 'straps-locked-shake' : ''}"
+        style="transform-origin: ${mattressTransformOrigin}; transform: scaleY(${squashScaleY}); transition: transform 0.15s ease;"
+      >
+        <!-- Grabbable Mattress Body -->
+        <g id="handle-mattress" class="cursor-ew-resize" role="slider" aria-label="Move entire mattress" tabindex="0">
+          <rect
+            x="${matLeft}"
+            y="${mattressY}"
+            width="${matWidth}"
+            height="${mattressHeight}"
+            rx="4"
+            fill="url(#mattressThickGrad)"
+            stroke="${pal.mattressOutline}"
+            stroke-width="1.2"
+            filter="url(#softShadow)"
+          />
+          <rect
+            x="${matLeft + 1}"
+            y="${mattressY + mattressHeight - 5}"
+            width="${Math.max(0, matWidth - 2)}"
+            height="4"
+            rx="1.5"
+            fill="url(#boxSpringGrad)"
+            opacity="0.85"
+          />
+          <path
+            d="M ${matLeft + 2} ${mattressY + 2} L ${matRight - 2} ${mattressY + 2}"
+            stroke="#FFFFFF"
+            stroke-width="1.5"
+            stroke-linecap="round"
+          />
+          <g id="quilt-tufts">
+            ${quiltTuftsSvg}
+          </g>
+        </g>
 
-        ${matWidth > 18 ? `
-          <path d="M ${matLeft + 2} ${mattressY + 5} Q ${matCenter} ${mattressY + 6.2} ${matRight - 2} ${mattressY + 5}" stroke="#D3DBE0" stroke-width="0.9" fill="none" />
-          <path d="M ${matLeft + 2} ${mattressY + 10} Q ${matCenter} ${mattressY + 11} ${matRight - 2} ${mattressY + 10}" stroke="#E3E8EC" stroke-width="0.8" stroke-dasharray="2.5,2" fill="none" />
-          <path d="M ${matLeft + 2} ${mattressY + 14.5} Q ${matCenter} ${mattressY + 15.5} ${matRight - 2} ${mattressY + 14.5}" stroke="#D1D9DF" stroke-width="0.9" fill="none" />
-        ` : ''}
-
-        ${mattressTufts}
-
+        <!-- Left Strap Handle -->
         <g
-          id="handle-mattress"
-          class="mattress-drag-group ${state.activeDragHandle === 'mattress' ? 'dragging' : ''} ${isLocked ? 'locked' : ''}"
-          tabindex="${isLocked ? '-1' : '0'}"
+          id="handle-left"
+          class="handle-group ${state.activeDragHandle === 'left' ? 'is-dragging' : ''}"
           role="slider"
-          aria-label="Draggable mattress body"
+          aria-label="Set lower range bound"
           aria-valuemin="${min}"
           aria-valuemax="${max}"
           aria-valuenow="${rangeData.lo}"
-          aria-valuetext="${formatNum(rangeData.lo)} to ${formatNum(rangeData.hi)} ${state.question.unit}"
+          tabindex="0"
         >
-          <rect x="${matLeft + 2}" y="${mattressY - 2}" width="${Math.max(1, matWidth - 4)}" height="${mattressHeight + 4}" fill="transparent" pointer-events="all" />
+          <rect
+            x="${strapLeftCenterX - 18}"
+            y="${strapTopY - 14}"
+            width="36"
+            height="${strapH + 28}"
+            fill="transparent"
+            class="touch-hitbox"
+          />
+          <rect
+            x="${strapLeftCenterX - strapWidth / 2}"
+            y="${strapTopY}"
+            width="${strapWidth}"
+            height="${strapH}"
+            rx="1.5"
+            fill="${pal.accentOrange}"
+            stroke="${pal.strapStitch}"
+            stroke-width="0.8"
+            filter="url(#softShadow)"
+          />
+          <circle cx="${strapLeftCenterX}" cy="${strapTopY + 1}" r="1.8" fill="${pal.buckleHighlight}" />
+          <circle cx="${strapLeftCenterX}" cy="${strapBottomY - 1}" r="1.8" fill="${pal.buckleHighlight}" />
         </g>
 
-        ${straps}
+        <!-- Right Strap Handle -->
+        <g
+          id="handle-right"
+          class="handle-group ${state.activeDragHandle === 'right' ? 'is-dragging' : ''}"
+          role="slider"
+          aria-label="Set upper range bound"
+          aria-valuemin="${min}"
+          aria-valuemax="${max}"
+          aria-valuenow="${rangeData.hi}"
+          tabindex="0"
+        >
+          <rect
+            x="${strapRightCenterX - 18}"
+            y="${strapTopY - 14}"
+            width="36"
+            height="${strapH + 28}"
+            fill="transparent"
+            class="touch-hitbox"
+          />
+          <rect
+            x="${strapRightCenterX - strapWidth / 2}"
+            y="${strapTopY}"
+            width="${strapWidth}"
+            height="${strapH}"
+            rx="1.5"
+            fill="${pal.accentOrange}"
+            stroke="${pal.strapStitch}"
+            stroke-width="0.8"
+            filter="url(#softShadow)"
+          />
+          <circle cx="${strapRightCenterX}" cy="${strapTopY + 1}" r="1.8" fill="${pal.buckleHighlight}" />
+          <circle cx="${strapRightCenterX}" cy="${strapBottomY - 1}" r="1.8" fill="${pal.buckleHighlight}" />
+        </g>
       </g>
     `;
 
-    // 8. Badges
+    // Number text under straps
     let strapNumbers = '';
     if (shouldMergeLabels) {
       const mergedText = `${leftNumStr} – ${rightNumStr}`;
-      const pillW = Math.max(72, mergedText.length * 6.8 + 16);
+      const pillW = Math.max(54, mergedText.length * 7.2 + 16);
       const pillH = 19;
       strapNumbers = `
         <g id="strap-number-badges" font-family="'Fredoka', system-ui, sans-serif" font-size="11.5" font-weight="700">
@@ -1324,7 +1653,7 @@
       `;
     }
 
-    // 9. Multiplier
+    // 9. Multiplier badge on mattress
     const multiplierDisplay = `
       <g transform="translate(${matCenter}, ${mattressY - 17})">
         <rect x="-25" y="-12" width="50" height="24" rx="12" fill="${pal.creamBg}" stroke="${pal.deepGreen}" stroke-width="1.6" filter="url(#softShadow)" />
@@ -1380,7 +1709,6 @@
 
   /**
    * Bind Pointerdown and Keydown Events to Handle Straps & Mattress Body
-   * (Pointermove & Pointerup are managed globally on window + persistent container with PointerCapture)
    */
   function bindHandleEvents() {
     if (state.mode !== 'calibrating') return;
@@ -1404,7 +1732,7 @@
         state.activeDragHandle = handle;
         state.capturedPointerId = e.pointerId;
 
-        // Requirement 1: Pointer capture on persistent container so drag keeps working everywhere
+        // Pointer capture on persistent container so drag keeps working everywhere
         const container = document.getElementById('scene-svg-wrapper');
         if (container && container.setPointerCapture) {
           try {
@@ -1412,7 +1740,7 @@
           } catch (_) {}
         }
 
-        // Requirement 3: Remember the gap between click point and strap edge (no jumping)
+        // Remember gap between click point and strap edge (no jumping)
         const layout = computeSceneLayout();
         const svgCoords = screenToSvgCoords(e.clientX, 0);
 
@@ -1431,9 +1759,9 @@
         renderScene();
       });
 
-      // Requirement 5: Keyboard control stays the same
+      // Keyboard control
       el.addEventListener('keydown', e => {
-        if (state.mode !== 'calibrating') return;
+        if (state.mode !== 'calibrating' || !state.question) return;
         const { min, max, total } = getQuestionScale(state.question);
         const baseStep = total > 10000 ? 100 : 10;
         const step = e.shiftKey ? baseStep * 10 : baseStep;
@@ -1495,9 +1823,10 @@
   function updateReadouts(rangeData) {
     const rangeDisplay = document.getElementById('range-value-display');
     const multiplierDisplay = document.getElementById('multiplier-value-display');
+    const unitStr = state.question && state.question.unit ? ` ${state.question.unit}` : '';
 
     if (rangeDisplay) {
-      rangeDisplay.textContent = `${formatNum(rangeData.lo)} – ${formatNum(rangeData.hi)} ${state.question.unit}`;
+      rangeDisplay.textContent = `${formatNum(rangeData.lo)} – ${formatNum(rangeData.hi)}${unitStr}`;
     }
 
     if (multiplierDisplay) {
@@ -1523,15 +1852,10 @@
       }, 100);
     });
 
-    // =========================================================================
-    // GLOBAL POINTER DRAG HANDLERS (Requirements 1, 2, 4)
-    // Works across the entire screen, above, below, or outside browser window.
-    // Completely ignores Y movement.
-    // =========================================================================
+    // Global pointer drag handlers
     function onGlobalPointerMove(e) {
       if (state.mode === 'calibrating' && state.activeDragHandle) {
         if (e.cancelable) e.preventDefault();
-        // Requirement 2: Use only clientX, completely ignore Y
         updateFromPointer(e.clientX);
       }
     }
@@ -1564,7 +1888,7 @@
     const btnLock = document.getElementById('btn-lock-in');
     if (btnLock) {
       btnLock.addEventListener('click', () => {
-        startRevealSequence();
+        submitAndReveal();
       });
     }
 
@@ -1574,6 +1898,27 @@
       btnNext.addEventListener('click', () => {
         advanceToNextQuestion();
       });
+    }
+
+    // Empty screen retry button
+    const btnRetry = document.getElementById('btn-empty-retry');
+    if (btnRetry) {
+      btnRetry.addEventListener('click', () => {
+        loadTodayQuestions();
+      });
+    }
+
+    // Milestone 4 Item 7:
+    // Only display developer preview test panel when CONFIG.TEST_MODE === true
+    const cornerTestPanel = document.getElementById('corner-test-panel');
+    if (cornerTestPanel) {
+      if (CONFIG.TEST_MODE) {
+        cornerTestPanel.classList.remove('hidden');
+        cornerTestPanel.style.display = '';
+      } else {
+        cornerTestPanel.classList.add('hidden');
+        cornerTestPanel.style.display = 'none';
+      }
     }
 
     // Toggle corner test controls
@@ -1606,15 +1951,14 @@
       });
     });
 
-    // Custom True Answer Input & Button
+    // Custom True Answer Input & Button (TEST_MODE only)
     const testInput = document.getElementById('test-true-answer-input');
     const btnSetCustom = document.getElementById('btn-set-custom-answer');
     if (btnSetCustom && testInput) {
       const applyCustom = () => {
         const val = Number(testInput.value);
-        if (!isNaN(val)) {
+        if (!isNaN(val) && state.question) {
           state.question.trueAnswer = val;
-          state.question.true_answer = val;
           showToast(`Test Answer set to ${formatNum(val)}`);
         }
       };
@@ -1624,22 +1968,23 @@
       });
     }
 
-    // Force Hit button
+    // Force Hit button (TEST_MODE only)
     const btnTestHit = document.getElementById('btn-test-hit');
     if (btnTestHit) {
       btnTestHit.addEventListener('click', () => {
+        if (!state.question) return;
         const mid = Math.round((state.currentLo + state.currentHi) / 2);
         state.question.trueAnswer = mid;
-        state.question.true_answer = mid;
         if (testInput) testInput.value = mid;
         showToast(`Forced Hit Answer: ${formatNum(mid)}`);
       });
     }
 
-    // Force Miss button
+    // Force Miss button (TEST_MODE only)
     const btnTestMiss = document.getElementById('btn-test-miss');
     if (btnTestMiss) {
       btnTestMiss.addEventListener('click', () => {
+        if (!state.question) return;
         const { min, max } = getQuestionScale(state.question);
         let missAns;
         if (state.currentLo > min + 80) {
@@ -1648,13 +1993,12 @@
           missAns = max - 20;
         }
         state.question.trueAnswer = missAns;
-        state.question.true_answer = missAns;
         if (testInput) testInput.value = missAns;
         showToast(`Forced Miss Answer: ${formatNum(missAns)}`);
       });
     }
 
-    // Replay button
+    // Replay button (TEST_MODE only)
     const btnReplay = document.getElementById('btn-replay');
     if (btnReplay) {
       btnReplay.addEventListener('click', () => {
@@ -1667,17 +2011,18 @@
   /**
    * Initialize Game Engine
    */
-  function init() {
-    setSlot(state.currentSlot, true);
+  async function init() {
     applyPalette(state.currentPalette);
     initControls();
+    await loadTodayQuestions();
   }
 
   window.computeScore = computeScore;
   window.numberToCanyonX = numberToCanyonX;
   window.canyonXToNumber = canyonXToNumber;
-  window.startRevealSequence = startRevealSequence;
+  window.submitAndReveal = submitAndReveal;
   window.advanceToNextQuestion = advanceToNextQuestion;
+  window.loadTodayQuestions = loadTodayQuestions;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
