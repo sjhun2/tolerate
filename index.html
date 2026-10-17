@@ -16,9 +16,6 @@
     <!-- Full-Screen Atmospheric Tint Overlay (Sunset warm tint / Night dark tint) -->
     <div class="fullscreen-tint-overlay" aria-hidden="true"></div>
 
-    <!-- Toast Notification Banner for status/error feedback -->
-    <div id="game-toast" class="game-toast hidden" role="status" aria-live="polite"></div>
-
     <!-- Milestone 4 Item 8: Loading Screen -->
     <div id="app-loading-screen" class="app-fullscreen-screen" aria-live="polite">
       <div class="app-screen-card">
@@ -100,14 +97,14 @@
         </div>
       </aside>
 
-      <!-- Top Card: Brand Title & Question -->
+      <!-- Top Card: Brand Title & Question (Exactly 3 Lines) -->
       <header class="floating-card-top" aria-label="Question Details">
         <div class="brand-title">
           <span>TOLERATE</span>
           <span class="brand-dot" aria-hidden="true"></span>
-          <span>THE DEEP DROP</span>
+          <span id="puzzle-date-display">10/17/26</span>
         </div>
-        <div class="question-meta">Daily Question · Slot <span id="current-slot-num">1</span></div>
+        <div id="question-progress-meta" class="question-meta">Question 1/3</div>
         <h1 id="question-text-display" class="question-text">Loading question...</h1>
       </header>
 
@@ -165,7 +162,7 @@
       </section>
     </main>
 
-    <!-- Pinned Supabase JS CDN Library (Item 2: exact pinned version 2.45.4, > 2 weeks old) -->
+    <!-- Pinned Supabase JS CDN Library (exact pinned version 2.45.4) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
     <!-- Scripts -->
